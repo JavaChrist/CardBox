@@ -446,6 +446,26 @@ const CardForm = ({ onCardAdded, onCancel }: CardFormProps) => {
                   onChange={handleImageChange}
                   className="hidden"
                 />
+
+                {/* Alternative pour ouvrir la caméra directement */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const input = document.getElementById('image') as HTMLInputElement;
+                    if (input) {
+                      // Forcer l'ouverture de la caméra sur mobile
+                      input.setAttribute('capture', 'environment');
+                      input.click();
+                    }
+                  }}
+                  className="mt-2 w-full bg-blue-100 hover:bg-blue-200 text-blue-700 py-2 px-4 rounded-lg text-sm font-medium transition-colors flex items-center justify-center space-x-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  <span>📸 Prendre une photo</span>
+                </button>
               </div>
 
               {/* Boutons */}

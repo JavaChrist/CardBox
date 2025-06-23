@@ -30,19 +30,26 @@ const CardItem = ({ card, onCardDeleted }: CardItemProps) => {
   const handleDelete = async () => {
     setLoading(true);
     try {
-      // Supprimer l'image du Storage
-      const imageRef = ref(storage, card.imageUrl);
-      await deleteObject(imageRef);
+      // Supprimer l'image du Storage seulement si elle existe et c'est une URL Firebase
+      if (card.imageUrl && card.imageUrl.includes('firebase')) {
+        try {
+          const imageRef = ref(storage, card.imageUrl);
+          await deleteObject(imageRef);
+        } catch (storageError) {
+          console.log('Image déjà supprimée ou introuvable:', storageError);
+        }
+      }
 
       // Supprimer le document de Firestore
       await deleteDoc(doc(db, 'cards', card.id));
 
       onCardDeleted(card.id);
+      setShowConfirm(false);
     } catch (error) {
       console.error('Erreur lors de la suppression:', error);
+      alert('Erreur lors de la suppression de la carte');
     } finally {
       setLoading(false);
-      setShowConfirm(false);
     }
   };
 

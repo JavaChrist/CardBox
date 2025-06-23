@@ -1,20 +1,27 @@
 {
-  "name": "CardBox",
+  "name": "CardBox - Portefeuille Digital",
   "short_name": "CardBox",
+  "description": "Gestion simple et moderne de vos cartes de fidélité",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "orientation": "portrait",
   "background_color": "#ffffff",
-  "theme_color": "#111827",
+  "theme_color": "#3b82f6",
+  "categories": ["productivity", "finance"],
+  "lang": "fr",
   "icons": [
     {
       "src": "/logob192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     },
     {
       "src": "/logob512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ]
 }
