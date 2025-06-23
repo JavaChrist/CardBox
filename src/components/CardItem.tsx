@@ -20,9 +20,10 @@ interface Card {
 interface CardItemProps {
   card: Card;
   onCardDeleted: (cardId: string) => void;
+  onCardUpdated?: () => void;
 }
 
-const CardItem = ({ card, onCardDeleted }: CardItemProps) => {
+const CardItem = ({ card, onCardDeleted, onCardUpdated }: CardItemProps) => {
   const [loading, setLoading] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [showBarcodeModal, setShowBarcodeModal] = useState(false);
@@ -211,7 +212,13 @@ const CardItem = ({ card, onCardDeleted }: CardItemProps) => {
       {showBarcodeModal && (
         <BarcodeModal
           card={card}
-          onClose={() => setShowBarcodeModal(false)}
+          onClose={() => {
+            setShowBarcodeModal(false);
+            // Déclencher le refresh des cartes si une fonction est fournie
+            if (onCardUpdated) {
+              onCardUpdated();
+            }
+          }}
         />
       )}
     </>

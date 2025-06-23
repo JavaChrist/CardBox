@@ -1,4 +1,7 @@
 import React, { useEffect, useState } from 'react';
+import { doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { db, storage } from '../services/firebase';
 
 interface Card {
   id: string;
@@ -24,6 +27,13 @@ const BarcodeModal: React.FC<BarcodeModalProps> = ({ card, onClose }) => {
   const [showPhoto, setShowPhoto] = useState(false);
   const [showNote, setShowNote] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
+
+  // États pour l'édition
+  const [editCardNumber, setEditCardNumber] = useState(card.cardNumber || '');
+  const [editNote, setEditNote] = useState(card.note || '');
+  const [editImage, setEditImage] = useState<File | null>(null);
+  const [editPreview, setEditPreview] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
   // Fermer modal avec Échap
   useEffect(() => {
@@ -85,6 +95,91 @@ const BarcodeModal: React.FC<BarcodeModalProps> = ({ card, onClose }) => {
 
   const barcode = generateBarcode(card.id);
   const barcodeNumber = card.id.replace(/[^0-9]/g, '').slice(0, 13).padEnd(13, '0');
+
+  // Fonctions d'édition
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setEditImage(file);
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        setEditPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleUpdateCard = async () => {
+    setLoading(true);
+    try {
+      const updates: any = {
+        cardNumber: editCardNumber.trim(),
+        note: editNote.trim()
+      };
+
+      // Upload nouvelle image si sélectionnée
+      if (editImage) {
+        const imageRef = ref(storage, `cards/${card.userId}/${Date.now()}_${editImage.name}`);
+        const uploadResult = await uploadBytes(imageRef, editImage);
+        const newImageUrl = await getDownloadURL(uploadResult.ref);
+        updates.imageUrl = newImageUrl;
+
+        // Supprimer ancienne image si elle existe
+        if (card.imageUrl && card.imageUrl.includes('firebase')) {
+          try {
+            const oldImageRef = ref(storage, card.imageUrl);
+            await deleteObject(oldImageRef);
+          } catch (error) {
+            console.log('Ancienne image déjà supprimée:', error);
+          }
+        }
+      }
+
+      // Mettre à jour le document
+      await updateDoc(doc(db, 'cards', card.id), updates);
+
+      // Fermer modals et actualiser
+      setShowEditCard(false);
+      setShowPhoto(false);
+      setShowNote(false);
+      setShowManageMenu(false);
+      onClose(); // Fermer et forcer refresh
+
+    } catch (error) {
+      console.error('Erreur lors de la mise à jour:', error);
+      alert('Erreur lors de la mise à jour de la carte');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteCard = async () => {
+    setLoading(true);
+    try {
+      // Supprimer l'image du Storage si elle existe
+      if (card.imageUrl && card.imageUrl.includes('firebase')) {
+        try {
+          const imageRef = ref(storage, card.imageUrl);
+          await deleteObject(imageRef);
+        } catch (error) {
+          console.log('Image déjà supprimée:', error);
+        }
+      }
+
+      // Supprimer le document
+      await deleteDoc(doc(db, 'cards', card.id));
+
+      // Fermer modal et actualiser
+      onClose();
+
+    } catch (error) {
+      console.error('Erreur lors de la suppression:', error);
+      alert('Erreur lors de la suppression de la carte');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div
@@ -347,74 +442,245 @@ const BarcodeModal: React.FC<BarcodeModalProps> = ({ card, onClose }) => {
         </div>
       )}
 
-      {/* Modals de gestion (placeholders pour l'instant) */}
+      {/* Modal Modifier la carte */}
       {showEditCard && (
         <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-60 p-4">
           <div className="bg-white rounded-2xl max-w-sm w-full mx-4 p-6">
-            <h3 className="text-lg font-semibold mb-4">Modifier la carte</h3>
-            <p className="text-gray-600 text-center py-8">Fonctionnalité en cours de développement...</p>
-            <button
-              onClick={() => setShowEditCard(false)}
-              className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-3 px-4 rounded-xl transition-colors"
-            >
-              Fermer
-            </button>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">Modifier la carte</h3>
+              <button onClick={() => setShowEditCard(false)} className="text-gray-400 hover:text-gray-600">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Numéro de carte */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Numéro de carte
+                </label>
+                <input
+                  type="text"
+                  value={editCardNumber}
+                  onChange={(e) => setEditCardNumber(e.target.value)}
+                  placeholder="Ex: 1234567890123"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono"
+                />
+              </div>
+
+              {/* Boutons */}
+              <div className="flex space-x-3 pt-4">
+                <button
+                  onClick={() => setShowEditCard(false)}
+                  className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-3 px-4 rounded-xl transition-colors"
+                  disabled={loading}
+                >
+                  Annuler
+                </button>
+                <button
+                  onClick={handleUpdateCard}
+                  disabled={loading}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-xl transition-colors disabled:opacity-50"
+                >
+                  {loading ? 'Enregistrement...' : 'Enregistrer'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
 
+      {/* Modal Photos */}
       {showPhoto && (
         <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-60 p-4">
           <div className="bg-white rounded-2xl max-w-sm w-full mx-4 p-6">
-            <h3 className="text-lg font-semibold mb-4">Photos</h3>
-            <p className="text-gray-600 text-center py-8">Fonctionnalité en cours de développement...</p>
-            <button
-              onClick={() => setShowPhoto(false)}
-              className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-3 px-4 rounded-xl transition-colors"
-            >
-              Fermer
-            </button>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">Photo de la carte</h3>
+              <button onClick={() => setShowPhoto(false)} className="text-gray-400 hover:text-gray-600">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Photo actuelle */}
+              {card.imageUrl && !editPreview && (
+                <div>
+                  <p className="text-sm text-gray-600 mb-2">Photo actuelle :</p>
+                  <img
+                    src={card.imageUrl}
+                    alt={card.name}
+                    className="w-full h-32 object-cover rounded-lg border"
+                  />
+                </div>
+              )}
+
+              {/* Prévisualisation nouvelle photo */}
+              {editPreview && (
+                <div>
+                  <p className="text-sm text-gray-600 mb-2">Nouvelle photo :</p>
+                  <img
+                    src={editPreview}
+                    alt="Prévisualisation"
+                    className="w-full h-32 object-cover rounded-lg border"
+                  />
+                </div>
+              )}
+
+              {/* Input file */}
+              <div>
+                <input
+                  id="edit-photo"
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handleImageChange}
+                  className="hidden"
+                />
+                <button
+                  onClick={() => document.getElementById('edit-photo')?.click()}
+                  className="w-full bg-blue-100 hover:bg-blue-200 text-blue-700 py-3 px-4 rounded-lg font-medium transition-colors flex items-center justify-center space-x-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  <span>📸 Changer la photo</span>
+                </button>
+              </div>
+
+              {/* Boutons */}
+              <div className="flex space-x-3 pt-4">
+                <button
+                  onClick={() => {
+                    setShowPhoto(false);
+                    setEditImage(null);
+                    setEditPreview(null);
+                  }}
+                  className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-3 px-4 rounded-xl transition-colors"
+                  disabled={loading}
+                >
+                  Annuler
+                </button>
+                {editImage && (
+                  <button
+                    onClick={handleUpdateCard}
+                    disabled={loading}
+                    className="flex-1 bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-4 rounded-xl transition-colors disabled:opacity-50"
+                  >
+                    {loading ? 'Enregistrement...' : 'Enregistrer'}
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}
 
+      {/* Modal Note */}
       {showNote && (
         <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-60 p-4">
           <div className="bg-white rounded-2xl max-w-sm w-full mx-4 p-6">
-            <h3 className="text-lg font-semibold mb-4">Note</h3>
-            <p className="text-gray-600 text-center py-8">Fonctionnalité en cours de développement...</p>
-            <button
-              onClick={() => setShowNote(false)}
-              className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-3 px-4 rounded-xl transition-colors"
-            >
-              Fermer
-            </button>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">Note personnelle</h3>
+              <button onClick={() => setShowNote(false)} className="text-gray-400 hover:text-gray-600">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Zone de texte pour la note */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Votre note
+                </label>
+                <textarea
+                  value={editNote}
+                  onChange={(e) => setEditNote(e.target.value)}
+                  placeholder="Ajoutez une note personnelle sur cette carte (ex: points fidélité, avantages...)"
+                  rows={4}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  {editNote.length}/500 caractères
+                </p>
+              </div>
+
+              {/* Boutons */}
+              <div className="flex space-x-3 pt-4">
+                <button
+                  onClick={() => {
+                    setShowNote(false);
+                    setEditNote(card.note || ''); // Reset à la valeur originale
+                  }}
+                  className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-3 px-4 rounded-xl transition-colors"
+                  disabled={loading}
+                >
+                  Annuler
+                </button>
+                <button
+                  onClick={handleUpdateCard}
+                  disabled={loading}
+                  className="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-medium py-3 px-4 rounded-xl transition-colors disabled:opacity-50"
+                >
+                  {loading ? 'Enregistrement...' : 'Enregistrer'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
 
+      {/* Modal Suppression */}
       {showDelete && (
         <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-60 p-4">
           <div className="bg-white rounded-2xl max-w-sm w-full mx-4 p-6">
-            <h3 className="text-lg font-semibold text-red-900 mb-4">Supprimer la carte</h3>
-            <p className="text-gray-600 text-center py-4">Êtes-vous sûr de vouloir supprimer cette carte ? Cette action est irréversible.</p>
-            <div className="flex space-x-3 mt-6">
-              <button
-                onClick={() => setShowDelete(false)}
-                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-3 px-4 rounded-xl transition-colors"
-              >
-                Annuler
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-red-900">Supprimer la carte</h3>
+              <button onClick={() => setShowDelete(false)} className="text-gray-400 hover:text-gray-600">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
               </button>
-              <button
-                onClick={() => {
-                  // Logique de suppression ici
-                  setShowDelete(false);
-                  onClose();
-                }}
-                className="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-3 px-4 rounded-xl transition-colors"
-              >
-                Supprimer
-              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Avertissement */}
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                <div className="flex items-center space-x-2">
+                  <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                  </svg>
+                  <p className="text-sm font-medium text-red-800">Attention !</p>
+                </div>
+                <p className="text-sm text-red-700 mt-2">
+                  Vous êtes sur le point de supprimer définitivement la carte <strong>{card.name}</strong>.
+                  Cette action est irréversible et supprimera également toutes les photos associées.
+                </p>
+              </div>
+
+              {/* Boutons */}
+              <div className="flex space-x-3 pt-4">
+                <button
+                  onClick={() => setShowDelete(false)}
+                  className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-3 px-4 rounded-xl transition-colors"
+                  disabled={loading}
+                >
+                  Annuler
+                </button>
+                <button
+                  onClick={handleDeleteCard}
+                  disabled={loading}
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-3 px-4 rounded-xl transition-colors disabled:opacity-50"
+                >
+                  {loading ? 'Suppression...' : '🗑️ Supprimer'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

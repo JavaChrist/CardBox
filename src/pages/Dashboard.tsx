@@ -86,6 +86,13 @@ const Dashboard = () => {
     setCards(prev => prev.filter(card => card.id !== cardId));
   };
 
+  const handleCardUpdated = () => {
+    // Recharger les cartes depuis Firebase après modification
+    if (!isDemo) {
+      loadCards();
+    }
+  };
+
   const loadCards = async (forceFirebase = false) => {
     try {
       const user = auth.currentUser;
@@ -312,6 +319,7 @@ const Dashboard = () => {
                 <CardItem
                   card={card}
                   onCardDeleted={handleCardDeleted}
+                  onCardUpdated={handleCardUpdated}
                 />
               </div>
             ))}
