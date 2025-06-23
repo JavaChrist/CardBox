@@ -9,6 +9,10 @@ export interface Card {
   imageUrl: string;
   createdAt: Date;
   userId: string;
+  brandId?: string;
+  logoUrl?: string;
+  cardNumber?: string;
+  note?: string;
 }
 
 export const cardService = {
@@ -34,6 +38,10 @@ export const cardService = {
           imageUrl: data.imageUrl,
           createdAt: data.createdAt.toDate(),
           userId: data.userId,
+          brandId: data.brandId,
+          logoUrl: data.logoUrl,
+          cardNumber: data.cardNumber,
+          note: data.note,
         });
       });
 

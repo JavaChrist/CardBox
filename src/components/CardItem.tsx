@@ -28,6 +28,8 @@ const CardItem = ({ card, onCardDeleted, onCardUpdated }: CardItemProps) => {
   const [showConfirm, setShowConfirm] = useState(false);
   const [showBarcodeModal, setShowBarcodeModal] = useState(false);
 
+
+
   const handleDelete = async () => {
     setLoading(true);
     try {
@@ -48,7 +50,7 @@ const CardItem = ({ card, onCardDeleted, onCardUpdated }: CardItemProps) => {
       setShowConfirm(false);
     } catch (error) {
       console.error('Erreur lors de la suppression:', error);
-      alert('Erreur lors de la suppression de la carte');
+      // L'erreur sera affichée dans la console, pas d'alert
     } finally {
       setLoading(false);
     }
@@ -163,6 +165,8 @@ const CardItem = ({ card, onCardDeleted, onCardUpdated }: CardItemProps) => {
             </p>
           </div>
 
+
+
           {/* Informations carte */}
           <div className="flex justify-between items-center text-xs text-gray-500">
             <span>Membre depuis {formatDate(card.createdAt)}</span>
@@ -172,12 +176,7 @@ const CardItem = ({ card, onCardDeleted, onCardUpdated }: CardItemProps) => {
           </div>
         </div>
 
-        {/* Indicateur cliquable */}
-        <div className="absolute bottom-2 right-2 bg-blue-600 text-white rounded-full p-1">
-          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-            <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-          </svg>
-        </div>
+
       </div>
 
       {/* Modal de confirmation de suppression */}
@@ -214,11 +213,8 @@ const CardItem = ({ card, onCardDeleted, onCardUpdated }: CardItemProps) => {
           card={card}
           onClose={() => {
             setShowBarcodeModal(false);
-            // Déclencher le refresh des cartes si une fonction est fournie
-            if (onCardUpdated) {
-              onCardUpdated();
-            }
           }}
+          onCardUpdated={onCardUpdated}
         />
       )}
     </>

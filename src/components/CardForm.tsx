@@ -74,18 +74,18 @@ const CardForm = ({ onCardAdded, onCancel }: CardFormProps) => {
     e.preventDefault();
 
     if (!selectedBrand) {
-      alert('Veuillez sélectionner une marque');
+      console.error('Aucune marque sélectionnée');
       return;
     }
 
     if (selectedBrand.id === 'divers' && !customBrandName.trim()) {
-      alert('Veuillez saisir le nom de la marque');
+      console.error('Nom de marque requis pour les marques personnalisées');
       return;
     }
 
     const user = auth.currentUser;
     if (!user) {
-      alert('Vous devez être connecté pour ajouter une carte');
+      console.error('Utilisateur non connecté');
       return;
     }
 
@@ -136,7 +136,7 @@ const CardForm = ({ onCardAdded, onCancel }: CardFormProps) => {
       onCardAdded(newCard);
     } catch (error) {
       console.error('Erreur lors de l\'ajout de la carte:', error);
-      alert('Erreur lors de l\'ajout de la carte');
+      // L'erreur sera affichée dans la console
     } finally {
       setLoading(false);
     }

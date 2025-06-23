@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
-import { db, storage } from '../services/firebase';
+import { db, storage, auth } from '../services/firebase';
 
 interface Card {
   id: string;
@@ -19,9 +19,10 @@ interface Card {
 interface BarcodeModalProps {
   card: Card;
   onClose: () => void;
+  onCardUpdated?: () => void;
 }
 
-const BarcodeModal: React.FC<BarcodeModalProps> = ({ card, onClose }) => {
+const BarcodeModal: React.FC<BarcodeModalProps> = ({ card, onClose, onCardUpdated }) => {
   const [showManageMenu, setShowManageMenu] = useState(false);
   const [showEditCard, setShowEditCard] = useState(false);
   const [showPhoto, setShowPhoto] = useState(false);
@@ -34,6 +35,22 @@ const BarcodeModal: React.FC<BarcodeModalProps> = ({ card, onClose }) => {
   const [editImage, setEditImage] = useState<File | null>(null);
   const [editPreview, setEditPreview] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // État pour les notifications
+  const [notification, setNotification] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
+
+  // Fonction pour afficher une notification
+  const showNotification = (type: 'success' | 'error', message: string) => {
+    setNotification({ type, message });
+    setTimeout(() => {
+      setNotification(null);
+    }, 3000);
+  };
+
+
 
   // Fermer modal avec Échap
   useEffect(() => {
@@ -113,23 +130,36 @@ const BarcodeModal: React.FC<BarcodeModalProps> = ({ card, onClose }) => {
   const handleUpdateCard = async () => {
     setLoading(true);
     try {
+      console.log('🔄 Début de la mise à jour de la carte:', card.id);
+
+      const user = auth.currentUser;
+      if (!user) {
+        showNotification('error', 'Vous devez être connecté pour modifier une carte');
+        return;
+      }
+
       const updates: any = {
         cardNumber: editCardNumber.trim(),
         note: editNote.trim()
       };
 
+      console.log('📝 Données à mettre à jour:', updates);
+
       // Upload nouvelle image si sélectionnée
       if (editImage) {
-        const imageRef = ref(storage, `cards/${card.userId}/${Date.now()}_${editImage.name}`);
+        console.log('📸 Upload de la nouvelle image...');
+        const imageRef = ref(storage, `cards/${user.uid}/${Date.now()}_${editImage.name}`);
         const uploadResult = await uploadBytes(imageRef, editImage);
         const newImageUrl = await getDownloadURL(uploadResult.ref);
         updates.imageUrl = newImageUrl;
+        console.log('✅ Nouvelle image uploadée:', newImageUrl);
 
         // Supprimer ancienne image si elle existe
         if (card.imageUrl && card.imageUrl.includes('firebase')) {
           try {
             const oldImageRef = ref(storage, card.imageUrl);
             await deleteObject(oldImageRef);
+            console.log('🗑️ Ancienne image supprimée');
           } catch (error) {
             console.log('Ancienne image déjà supprimée:', error);
           }
@@ -137,18 +167,31 @@ const BarcodeModal: React.FC<BarcodeModalProps> = ({ card, onClose }) => {
       }
 
       // Mettre à jour le document
+      console.log('💾 Mise à jour du document Firestore...');
       await updateDoc(doc(db, 'cards', card.id), updates);
+      console.log('✅ Document mis à jour avec succès');
 
       // Fermer modals et actualiser
       setShowEditCard(false);
       setShowPhoto(false);
       setShowNote(false);
       setShowManageMenu(false);
-      onClose(); // Fermer et forcer refresh
+
+      showNotification('success', 'Carte mise à jour avec succès !');
+
+      // Notifier le parent de la mise à jour
+      if (onCardUpdated) {
+        onCardUpdated();
+      }
+
+      // Délai pour voir la notification avant de fermer
+      setTimeout(() => {
+        onClose();
+      }, 1500);
 
     } catch (error) {
-      console.error('Erreur lors de la mise à jour:', error);
-      alert('Erreur lors de la mise à jour de la carte');
+      console.error('❌ Erreur lors de la mise à jour:', error);
+      showNotification('error', 'Erreur lors de la mise à jour de la carte');
     } finally {
       setLoading(false);
     }
@@ -157,25 +200,46 @@ const BarcodeModal: React.FC<BarcodeModalProps> = ({ card, onClose }) => {
   const handleDeleteCard = async () => {
     setLoading(true);
     try {
+      console.log('🗑️ Début de la suppression de la carte:', card.id);
+
+      const user = auth.currentUser;
+      if (!user) {
+        showNotification('error', 'Vous devez être connecté pour supprimer une carte');
+        return;
+      }
+
       // Supprimer l'image du Storage si elle existe
       if (card.imageUrl && card.imageUrl.includes('firebase')) {
         try {
+          console.log('📸 Suppression de l\'image du Storage...');
           const imageRef = ref(storage, card.imageUrl);
           await deleteObject(imageRef);
+          console.log('✅ Image supprimée du Storage');
         } catch (error) {
           console.log('Image déjà supprimée:', error);
         }
       }
 
       // Supprimer le document
+      console.log('💾 Suppression du document Firestore...');
       await deleteDoc(doc(db, 'cards', card.id));
+      console.log('✅ Document supprimé avec succès');
 
-      // Fermer modal et actualiser
-      onClose();
+      showNotification('success', 'Carte supprimée avec succès !');
+
+      // Notifier le parent de la suppression
+      if (onCardUpdated) {
+        onCardUpdated();
+      }
+
+      // Délai pour voir la notification avant de fermer
+      setTimeout(() => {
+        onClose();
+      }, 1500);
 
     } catch (error) {
-      console.error('Erreur lors de la suppression:', error);
-      alert('Erreur lors de la suppression de la carte');
+      console.error('❌ Erreur lors de la suppression:', error);
+      showNotification('error', 'Erreur lors de la suppression de la carte');
     } finally {
       setLoading(false);
     }
@@ -302,6 +366,28 @@ const BarcodeModal: React.FC<BarcodeModalProps> = ({ card, onClose }) => {
                     {card.type}
                   </span>
                 </div>
+
+                {/* Numéro de carte personnalisé */}
+                {card.cardNumber && (
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-gray-600">Numéro personnel</span>
+                    <span className="text-gray-900 font-medium font-mono">
+                      {card.cardNumber}
+                    </span>
+                  </div>
+                )}
+
+                {/* Note personnelle */}
+                {card.note && (
+                  <div className="text-sm">
+                    <span className="text-gray-600 block mb-1">📝 Note personnelle :</span>
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                      <p className="text-gray-800 text-xs leading-relaxed">
+                        {card.note}
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -326,8 +412,14 @@ const BarcodeModal: React.FC<BarcodeModalProps> = ({ card, onClose }) => {
 
       {/* Menu "Gérer" */}
       {showManageMenu && (
-        <div className="fixed inset-0 bg-black bg-opacity-90 flex items-end justify-center z-60 p-4">
-          <div className="bg-white rounded-t-3xl w-full max-w-md transform transition-all">
+        <div
+          className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-60 p-4"
+          onClick={() => setShowManageMenu(false)}
+        >
+          <div
+            className="bg-white rounded-3xl w-full max-w-md transform transition-all"
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* Header */}
             <div className="flex items-center justify-between p-6 border-b border-gray-100">
               <h3 className="text-lg font-semibold text-gray-900">Gérer</h3>
@@ -444,8 +536,14 @@ const BarcodeModal: React.FC<BarcodeModalProps> = ({ card, onClose }) => {
 
       {/* Modal Modifier la carte */}
       {showEditCard && (
-        <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-60 p-4">
-          <div className="bg-white rounded-2xl max-w-sm w-full mx-4 p-6">
+        <div
+          className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-60 p-4"
+          onClick={() => setShowEditCard(false)}
+        >
+          <div
+            className="bg-white rounded-2xl max-w-sm w-full mx-4 p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold">Modifier la carte</h3>
               <button onClick={() => setShowEditCard(false)} className="text-gray-400 hover:text-gray-600">
@@ -494,8 +592,18 @@ const BarcodeModal: React.FC<BarcodeModalProps> = ({ card, onClose }) => {
 
       {/* Modal Photos */}
       {showPhoto && (
-        <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-60 p-4">
-          <div className="bg-white rounded-2xl max-w-sm w-full mx-4 p-6">
+        <div
+          className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-60 p-4"
+          onClick={() => {
+            setShowPhoto(false);
+            setEditImage(null);
+            setEditPreview(null);
+          }}
+        >
+          <div
+            className="bg-white rounded-2xl max-w-sm w-full mx-4 p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold">Photo de la carte</h3>
               <button onClick={() => setShowPhoto(false)} className="text-gray-400 hover:text-gray-600">
@@ -582,8 +690,17 @@ const BarcodeModal: React.FC<BarcodeModalProps> = ({ card, onClose }) => {
 
       {/* Modal Note */}
       {showNote && (
-        <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-60 p-4">
-          <div className="bg-white rounded-2xl max-w-sm w-full mx-4 p-6">
+        <div
+          className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-60 p-4"
+          onClick={() => {
+            setShowNote(false);
+            setEditNote(card.note || '');
+          }}
+        >
+          <div
+            className="bg-white rounded-2xl max-w-sm w-full mx-4 p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold">Note personnelle</h3>
               <button onClick={() => setShowNote(false)} className="text-gray-400 hover:text-gray-600">
@@ -638,8 +755,14 @@ const BarcodeModal: React.FC<BarcodeModalProps> = ({ card, onClose }) => {
 
       {/* Modal Suppression */}
       {showDelete && (
-        <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-60 p-4">
-          <div className="bg-white rounded-2xl max-w-sm w-full mx-4 p-6">
+        <div
+          className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-60 p-4"
+          onClick={() => setShowDelete(false)}
+        >
+          <div
+            className="bg-white rounded-2xl max-w-sm w-full mx-4 p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-red-900">Supprimer la carte</h3>
               <button onClick={() => setShowDelete(false)} className="text-gray-400 hover:text-gray-600">
@@ -682,6 +805,45 @@ const BarcodeModal: React.FC<BarcodeModalProps> = ({ card, onClose }) => {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Notification Toast */}
+      {notification && (
+        <div className="fixed top-4 right-4 z-70 transform transition-all duration-300 ease-in-out">
+          <div className={`
+            rounded-lg shadow-lg p-4 min-w-[300px] flex items-center space-x-3
+            ${notification.type === 'success'
+              ? 'bg-green-600 text-white'
+              : 'bg-red-600 text-white'
+            }
+          `}>
+            {/* Icône */}
+            {notification.type === 'success' ? (
+              <svg className="w-6 h-6 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              </svg>
+            ) : (
+              <svg className="w-6 h-6 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              </svg>
+            )}
+
+            {/* Message */}
+            <p className="font-medium">
+              {notification.message}
+            </p>
+
+            {/* Bouton fermer */}
+            <button
+              onClick={() => setNotification(null)}
+              className="ml-auto flex-shrink-0 hover:bg-white hover:bg-opacity-20 rounded-full p-1 transition-colors"
+            >
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+              </svg>
+            </button>
           </div>
         </div>
       )}
