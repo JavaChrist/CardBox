@@ -153,10 +153,12 @@ const CardForm = ({ onCardAdded, onCancel }: CardFormProps) => {
       if (result.success) {
         setShowAnalysisResults(true);
 
-        // Pré-remplir automatiquement le champ numéro de carte
+        // PRIORITÉ : Codes-barres détectés par QuaggaJS (plus fiables)
         if (result.barcodes.length > 0) {
           setCardNumber(result.barcodes[0]);
-        } else if (result.numbers.length > 0) {
+        }
+        // SINON : Numéros détectés par OCR (moins fiables)
+        else if (result.numbers.length > 0) {
           setCardNumber(result.numbers[0]);
         }
       }

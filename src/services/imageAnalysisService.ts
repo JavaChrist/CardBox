@@ -30,22 +30,28 @@ export class ImageAnalysisService {
         this.scanBarcodes(imageUrl)
       ]);
 
-      // Traiter les résultats OCR
+      // Traiter les résultats codes-barres (PRIORITÉ)
+      if (barcodeResult.status === 'fulfilled') {
+        result.barcodes = barcodeResult.value;
+      }
+
+      // Traiter les résultats OCR (SECONDAIRE)
       if (ocrResult.status === 'fulfilled') {
         result.text = ocrResult.value.text;
         result.numbers = ocrResult.value.numbers;
       }
 
-      // Traiter les résultats codes-barres
-      if (barcodeResult.status === 'fulfilled') {
-        result.barcodes = barcodeResult.value;
-      }
-
       // Nettoyer l'URL
       URL.revokeObjectURL(imageUrl);
 
-      // Déterminer le succès
+      // Déterminer le succès (prioriser les codes-barres)
       result.success = result.barcodes.length > 0 || result.numbers.length > 0 || result.text.length > 10;
+
+      // Si on a des codes-barres QuaggaJS, on privilégie totalement
+      if (result.barcodes.length > 0) {
+        // Garder seulement les codes-barres, ignorer les numéros OCR potentiellement faux
+        result.numbers = [];
+      }
 
       return result;
 
@@ -97,30 +103,35 @@ export class ImageAnalysisService {
           canvas.height = img.height;
           ctx.drawImage(img, 0, 0);
 
-          // Configuration QuaggaJS
+          // Configuration QuaggaJS optimisée
           Quagga.decodeSingle({
             src: canvas,
             numOfWorkers: 0,
             inputStream: {
-              size: 800
+              size: 1200, // Plus haute résolution
+              constraints: {
+                width: 1280,
+                height: 720
+              }
             },
             locator: {
-              patchSize: "medium",
-              halfSample: true
+              patchSize: "large", // Meilleure détection
+              halfSample: false   // Pas de sous-échantillonnage
             },
             decoder: {
               readers: [
-                "code_128_reader",
-                "ean_reader",
-                "ean_8_reader",
-                "code_39_reader",
-                "code_39_vin_reader",
-                "codabar_reader",
-                "upc_reader",
-                "upc_e_reader",
-                "i2of5_reader"
+                "ean_reader",      // EAN-13 (priorité)
+                "ean_8_reader",    // EAN-8
+                "upc_reader",      // UPC
+                "code_128_reader", // Code 128
+                "upc_e_reader",    // UPC-E
+                "code_39_reader",  // Code 39
+                "i2of5_reader",    // Interleaved 2 of 5
+                "codabar_reader"   // Codabar
               ]
-            }
+            },
+            locate: true,
+            multiple: false
           }, (result) => {
             if (result && result.codeResult) {
               resolve([result.codeResult.code]);
@@ -204,10 +215,17 @@ export class ImageAnalysisService {
       }
     }
 
-    // Choisir le meilleur numéro automatiquement
-    const bestNumber = this.selectBestNumber(numbers);
+    // Si on a des codes-barres QuaggaJS, les prioriser absolument
+    if (numbers.length > 0) {
+      // Choisir le meilleur numéro automatiquement  
+      const bestNumber = this.selectBestNumber(numbers);
 
-    return bestNumber ? [bestNumber] : numbers;
+      // Retourner le meilleur + jusqu'à 2 alternatives pour choix manuel
+      const alternatives = numbers.filter(n => n !== bestNumber).slice(0, 2);
+      return bestNumber ? [bestNumber, ...alternatives] : numbers.slice(0, 3);
+    }
+
+    return numbers;
   }
 
   // Sélectionner le meilleur numéro parmi ceux détectés
@@ -220,23 +238,32 @@ export class ImageAnalysisService {
       let score = 0;
       const len = num.length;
 
-      // Bonus pour longueur optimale
-      if (len >= 13 && len <= 19) score += 10; // Codes-barres standards
-      else if (len >= 8 && len <= 12) score += 5;
-      else if (len > 19) score -= 5; // Trop long
+      // FORTE priorité pour longueurs de codes-barres standards
+      if (len === 13) score += 20; // EAN-13 (très commun)
+      else if (len === 12) score += 18; // UPC
+      else if (len === 8) score += 15; // EAN-8
+      else if (len >= 10 && len <= 14) score += 10; // Autres standards
+      else if (len > 19) score -= 20; // Beaucoup trop long
+      else if (len < 6) score -= 15; // Trop court
 
-      // Malus pour répétitions excessives (000000...)
+      // Malus FORT pour répétitions excessives (000000...)
       const uniqueDigits = new Set(num).size;
-      if (uniqueDigits <= 2) score -= 10;
-      else if (uniqueDigits <= 4) score -= 5;
-      else score += 2;
+      if (uniqueDigits <= 2) score -= 25; // Très suspect
+      else if (uniqueDigits <= 3) score -= 15; // Suspect  
+      else if (uniqueDigits <= 4) score -= 8; // Un peu suspect
+      else score += 5; // Bonne diversité
 
       // Bonus pour numéros qui ne commencent pas par 0
-      if (num[0] !== '0') score += 3;
+      if (num[0] !== '0') score += 5;
 
-      // Malus pour numéros qui se terminent par beaucoup de 0
+      // FORTE pénalité pour numéros qui se terminent par beaucoup de 0
       const trailingZeros = num.match(/0*$/)?.[0]?.length || 0;
-      if (trailingZeros > 3) score -= trailingZeros;
+      if (trailingZeros > 5) score -= 20;
+      else if (trailingZeros > 3) score -= 10;
+
+      // Bonus pour patterns typiques de codes-barres
+      if (/^[1-9]\d{11,12}$/.test(num)) score += 10; // Pattern EAN/UPC
+      if (/^[0-9]{13}$/.test(num) && num[0] !== '0') score += 8; // EAN-13 valide
 
       return { number: num, score };
     });
