@@ -75,6 +75,33 @@ const popularBrands: PopularBrand[] = [
     category: 'supermarche',
     description: 'Supermarchés Lidl'
   },
+  {
+    id: 'super-u',
+    name: 'Super U',
+    logo: '🛒',
+    logoUrl: 'https://logo.clearbit.com/magasins-u.com',
+    color: 'from-red-600 to-red-700',
+    category: 'supermarche',
+    description: 'Supermarchés Super U'
+  },
+  {
+    id: 'monoprix',
+    name: 'Monoprix',
+    logo: '🛒',
+    logoUrl: 'https://logo.clearbit.com/monoprix.fr',
+    color: 'from-purple-600 to-purple-700',
+    category: 'supermarche',
+    description: 'Supermarchés Monoprix'
+  },
+  {
+    id: 'picard',
+    name: 'Picard',
+    logo: '🧊',
+    logoUrl: 'https://logo.clearbit.com/picard.fr',
+    color: 'from-blue-600 to-blue-700',
+    category: 'supermarche',
+    description: 'Surgelés Picard'
+  },
 
   // Pharmacies
   {
@@ -164,6 +191,24 @@ const popularBrands: PopularBrand[] = [
     category: 'vetement',
     description: 'Vêtements casual'
   },
+  {
+    id: 'kiabi',
+    name: 'Kiabi',
+    logo: '👶',
+    logoUrl: 'https://logo.clearbit.com/kiabi.com',
+    color: 'from-blue-600 to-blue-700',
+    category: 'vetement',
+    description: 'Mode famille'
+  },
+  {
+    id: 'pimkie',
+    name: 'Pimkie',
+    logo: '💃',
+    logoUrl: 'https://logo.clearbit.com/pimkie.com',
+    color: 'from-pink-600 to-pink-700',
+    category: 'vetement',
+    description: 'Mode féminine'
+  },
 
   // Beauté
   {
@@ -223,6 +268,33 @@ const popularBrands: PopularBrand[] = [
     color: 'from-red-600 to-red-700',
     category: 'autre',
     description: 'Électroménager'
+  },
+  {
+    id: 'boulanger',
+    name: 'Boulanger',
+    logo: '💻',
+    logoUrl: 'https://logo.clearbit.com/boulanger.com',
+    color: 'from-orange-600 to-orange-700',
+    category: 'autre',
+    description: 'High-tech et électroménager'
+  },
+  {
+    id: 'norauto',
+    name: 'Norauto',
+    logo: '🚗',
+    logoUrl: 'https://logo.clearbit.com/norauto.fr',
+    color: 'from-blue-600 to-blue-700',
+    category: 'autre',
+    description: 'Entretien automobile'
+  },
+  {
+    id: 'feu-vert',
+    name: 'Feu Vert',
+    logo: '🔧',
+    logoUrl: 'https://logo.clearbit.com/feu-vert.fr',
+    color: 'from-green-600 to-green-700',
+    category: 'autre',
+    description: 'Centres auto'
   },
 
   // Divers - Pour cartes non référencées

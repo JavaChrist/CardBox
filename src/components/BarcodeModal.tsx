@@ -346,10 +346,11 @@ const BarcodeModal: React.FC<BarcodeModalProps> = ({ card, onClose, onCardUpdate
               <div className="mb-4">
                 <div className="bg-white p-4 rounded-lg border border-gray-200">
                   {hasRealBarcode ? (
-                    <div className="text-center">
+                    <div className="flex justify-center items-center py-2">
                       <canvas
                         ref={barcodeCanvasRef}
-                        className="mx-auto"
+                        className="max-w-full h-auto"
+                        style={{ display: 'block', margin: '0 auto' }}
                       />
                     </div>
                   ) : (
