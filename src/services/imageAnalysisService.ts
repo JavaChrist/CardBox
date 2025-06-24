@@ -342,33 +342,41 @@ export class ImageAnalysisService {
       let score = 0;
       const len = num.length;
 
-      // FORTE priorité pour longueurs de codes-barres standards
-      if (len === 13) score += 25; // EAN-13 (très commun cartes fidélité)
-      else if (len === 12) score += 22; // UPC
-      else if (len === 8) score += 20; // EAN-8
-      else if (len === 10 || len === 11) score += 18; // Autres standards courts
-      else if (len === 14 || len === 15) score += 15; // Standards moyens
-      else if (len >= 16 && len <= 19) score += 12; // Standards longs
-      else if (len > 20) score -= 25; // Beaucoup trop long
-      else if (len < 6) score -= 20; // Trop court
+      // NOUVELLE PRIORITÉ : Longueurs de cartes de fidélité réelles
+      if (len === 19) score += 30; // Castorama, grandes enseignes (PRIORITÉ MAX)
+      else if (len === 18) score += 28; // Autres longues cartes
+      else if (len === 16 || len === 17) score += 25; // Cartes bancaires/fidélité
+      else if (len === 13) score += 20; // EAN-13 standard
+      else if (len === 12) score += 18; // UPC
+      else if (len === 8) score += 15; // EAN-8
+      else if (len === 10 || len === 11) score += 12; // Autres standards courts
+      else if (len === 14 || len === 15) score += 10; // Standards moyens
+      else if (len > 20) score -= 30; // Beaucoup trop long
+      else if (len < 6) score -= 25; // Trop court
+
+      // BONUS ÉNORME pour patterns spécifiques de grandes enseignes
+      if (/^913\d{16}$/.test(num)) score += 50; // Castorama 913...
+      if (/^20\d{16,17}$/.test(num)) score += 40; // Super U, Leclerc 20...
+      if (/^345\d{15,16}$/.test(num)) score += 35; // Carrefour 345...
+      if (/^[1-9]\d{18}$/.test(num)) score += 25; // Tout numéro 19 chiffres commençant par 1-9
 
       // Malus TRÈS FORT pour répétitions excessives (000000...)
       const uniqueDigits = new Set(num).size;
-      if (uniqueDigits <= 2) score -= 30; // Très suspect
-      else if (uniqueDigits <= 3) score -= 20; // Suspect  
-      else if (uniqueDigits <= 4) score -= 12; // Un peu suspect
-      else if (uniqueDigits >= 8) score += 8; // Très bonne diversité
-      else if (uniqueDigits >= 6) score += 5; // Bonne diversité
+      if (uniqueDigits <= 2) score -= 35; // Très suspect
+      else if (uniqueDigits <= 3) score -= 25; // Suspect  
+      else if (uniqueDigits <= 4) score -= 15; // Un peu suspect
+      else if (uniqueDigits >= 8) score += 10; // Très bonne diversité
+      else if (uniqueDigits >= 6) score += 8; // Bonne diversité
 
       // FORT bonus pour numéros qui ne commencent pas par 0 (sauf EAN valides)
-      if (num[0] !== '0') score += 8;
-      else if (len === 13 || len === 8) score += 3; // EAN peut commencer par 0
+      if (num[0] !== '0') score += 12;
+      else if (len === 13 || len === 8) score += 5; // EAN peut commencer par 0
 
       // FORTE pénalité pour numéros qui se terminent par beaucoup de 0
       const trailingZeros = num.match(/0*$/)?.[0]?.length || 0;
-      if (trailingZeros > 6) score -= 25;
-      else if (trailingZeros > 4) score -= 15;
-      else if (trailingZeros > 2) score -= 8;
+      if (trailingZeros > 6) score -= 30;
+      else if (trailingZeros > 4) score -= 20;
+      else if (trailingZeros > 2) score -= 10;
 
       // Bonus pour patterns typiques de codes-barres cartes fidélité
       if (/^[1-9]\d{12}$/.test(num)) score += 15; // EAN-13 commençant par 1-9
@@ -376,9 +384,9 @@ export class ImageAnalysisService {
       if (/^[3-9]\d{7}$/.test(num)) score += 12; // EAN-8 commençant par 3-9
 
       // Malus pour patterns suspects
-      if (/^(\d)\1{7,}$/.test(num)) score -= 35; // Même chiffre répété
-      if (/^12345/.test(num) || /56789/.test(num)) score -= 20; // Séquences
-      if (/00000/.test(num)) score -= 15; // Trop de zéros consécutifs
+      if (/^(\d)\1{7,}$/.test(num)) score -= 40; // Même chiffre répété
+      if (/^12345/.test(num) || /56789/.test(num)) score -= 25; // Séquences
+      if (/00000/.test(num)) score -= 20; // Trop de zéros consécutifs
 
       // Bonus pour marques françaises courantes (patterns connus)
       if (/^3[0-9]{12}$/.test(num)) score += 12; // EAN-13 français (3...)
