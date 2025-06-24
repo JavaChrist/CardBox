@@ -14,6 +14,8 @@ export class ImageAnalysisService {
   // Analyser une image pour extraire codes-barres et texte
   static async analyzeImage(imageFile: File): Promise<AnalysisResult> {
     try {
+      console.log('🔍 DEBUT ANALYSE IMAGE:', imageFile.name, imageFile.size, 'bytes');
+
       const result: AnalysisResult = {
         barcodes: [],
         text: '',
@@ -33,12 +35,19 @@ export class ImageAnalysisService {
       // Traiter les résultats codes-barres (PRIORITÉ)
       if (barcodeResult.status === 'fulfilled') {
         result.barcodes = barcodeResult.value;
+        console.log('📊 CODES-BARRES QUAGGAJS:', result.barcodes);
+      } else {
+        console.log('❌ QUAGGAJS ERREUR:', barcodeResult.reason);
       }
 
       // Traiter les résultats OCR (SECONDAIRE)
       if (ocrResult.status === 'fulfilled') {
         result.text = ocrResult.value.text;
         result.numbers = ocrResult.value.numbers;
+        console.log('📝 TEXTE OCR BRUT:', result.text.substring(0, 200));
+        console.log('🔢 NUMEROS OCR DETECTES:', result.numbers);
+      } else {
+        console.log('❌ OCR ERREUR:', ocrResult.reason);
       }
 
       // Nettoyer l'URL
@@ -49,13 +58,18 @@ export class ImageAnalysisService {
 
       // Si on a des codes-barres QuaggaJS, on privilégie totalement
       if (result.barcodes.length > 0) {
+        console.log('🎯 CODES-BARRES DETECTES - Ignorant OCR');
         // Garder seulement les codes-barres, ignorer les numéros OCR potentiellement faux
         result.numbers = [];
+      } else {
+        console.log('⚠️ AUCUN CODE-BARRE - Utilisation OCR seulement');
       }
 
+      console.log('✅ RESULTAT FINAL:', result);
       return result;
 
     } catch (error) {
+      console.log('💥 ERREUR ANALYSE GLOBALE:', error);
       return {
         barcodes: [],
         text: '',
@@ -87,31 +101,38 @@ export class ImageAnalysisService {
   private static async scanBarcodes(imageUrl: string): Promise<string[]> {
     return new Promise((resolve, reject) => {
       try {
+        console.log('📊 DEBUT SCAN QUAGGAJS...');
         const img = new Image();
         img.onload = () => {
+          console.log('🖼️ IMAGE CHARGEE:', img.width, 'x', img.height);
+
           // Créer un canvas amélioré pour QuaggaJS
           const canvas = document.createElement('canvas');
           const ctx = canvas.getContext('2d')!;
 
-          // Augmenter la résolution pour améliorer la détection
-          const scale = Math.max(1, 800 / Math.min(img.width, img.height));
+          // BEAUCOUP plus de résolution pour améliorer la détection
+          const scale = Math.max(2, 1600 / Math.min(img.width, img.height));
           canvas.width = img.width * scale;
           canvas.height = img.height * scale;
 
-          // Améliorer l'image
+          // Améliorer l'image avec plus de contraste
           ctx.scale(scale, scale);
-          ctx.imageSmoothingEnabled = false; // Pas de lissage pour garder les détails
+          ctx.imageSmoothingEnabled = false; // Pas de lissage
+          ctx.filter = 'contrast(150%) brightness(110%)'; // Améliorer contraste
           ctx.drawImage(img, 0, 0);
 
-          // Essayer plusieurs configurations QuaggaJS
+          console.log('🎨 CANVAS AMELIORE:', canvas.width, 'x', canvas.height, 'scale:', scale);
+
+          // NOUVELLES configurations QuaggaJS - beaucoup plus de formats
           const configs = [
             {
-              name: 'Standard',
+              name: 'HighRes-AllFormats',
               config: {
                 src: canvas,
                 numOfWorkers: 0,
                 inputStream: {
-                  size: Math.max(canvas.width, canvas.height)
+                  size: Math.max(canvas.width, canvas.height),
+                  singleChannel: false
                 },
                 locator: {
                   patchSize: "large" as const,
@@ -119,33 +140,53 @@ export class ImageAnalysisService {
                 },
                 decoder: {
                   readers: [
-                    "ean_reader",
-                    "ean_8_reader",
-                    "upc_reader",
-                    "code_128_reader"
+                    "ean_reader",           // EAN-13, EAN-8
+                    "ean_8_reader",         // EAN-8 spécifique  
+                    "upc_reader",           // UPC-A, UPC-E
+                    "code_128_reader",      // Code 128
+                    "code_39_reader",       // Code 39
+                    "code_39_vin_reader",   // Code 39 VIN
+                    "codabar_reader",       // Codabar
+                    "i2of5_reader",         // Interleaved 2 of 5
+                    "2of5_reader",          // Standard 2 of 5
+                    "code_93_reader"        // Code 93
                   ]
                 }
               }
             },
             {
-              name: 'Alternative',
+              name: 'LowRes-EAN',
               config: {
                 src: canvas,
                 numOfWorkers: 0,
                 inputStream: {
-                  size: 600
+                  size: 800,
+                  singleChannel: true
                 },
                 locator: {
-                  patchSize: "medium" as const,
+                  patchSize: "large" as const,
                   halfSample: true
                 },
                 decoder: {
-                  readers: [
-                    "code_128_reader",
-                    "ean_reader",
-                    "code_39_reader",
-                    "i2of5_reader"
-                  ]
+                  readers: ["ean_reader", "upc_reader"]
+                }
+              }
+            },
+            {
+              name: 'HighContrast-Code128',
+              config: {
+                src: canvas,
+                numOfWorkers: 0,
+                inputStream: {
+                  size: 1200,
+                  singleChannel: false
+                },
+                locator: {
+                  patchSize: "large" as const,
+                  halfSample: false
+                },
+                decoder: {
+                  readers: ["code_128_reader", "code_39_reader", "i2of5_reader"]
                 }
               }
             }
@@ -154,18 +195,23 @@ export class ImageAnalysisService {
           let attempts = 0;
           const tryNext = () => {
             if (attempts >= configs.length) {
+              console.log('❌ TOUTES LES CONFIGS QUAGGAJS ONT ECHOUE');
               resolve([]);
               return;
             }
 
-            const { config } = configs[attempts];
+            const { name, config } = configs[attempts];
+            console.log(`🔄 TENTATIVE ${attempts + 1}: ${name}`);
 
             Quagga.decodeSingle(config, (result) => {
+              console.log(`🔍 QUAGGAJS ${name} RESULTAT:`, result);
               if (result && result.codeResult) {
+                console.log(`✅ CODE-BARRE DETECTE (${name}):`, result.codeResult.code);
+                console.log('📊 FORMAT:', result.codeResult.format);
                 resolve([result.codeResult.code]);
               } else {
                 attempts++;
-                setTimeout(tryNext, 500); // Délai entre tentatives
+                setTimeout(tryNext, 1000); // Plus de délai entre tentatives
               }
             });
           };
@@ -174,17 +220,20 @@ export class ImageAnalysisService {
         };
 
         img.onerror = () => {
+          console.log('❌ ERREUR CHARGEMENT IMAGE');
           reject(new Error('Impossible de charger l\'image'));
         };
 
         img.src = imageUrl;
 
-        // Timeout plus long pour les multiples tentatives
+        // Timeout encore plus long pour les multiples tentatives
         setTimeout(() => {
+          console.log('⏰ TIMEOUT QUAGGAJS (20s)');
           resolve([]);
-        }, 15000);
+        }, 20000);
 
       } catch (error) {
+        console.log('💥 ERREUR QUAGGAJS GLOBALE:', error);
         reject(error);
       }
     });

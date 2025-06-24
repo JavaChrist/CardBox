@@ -120,14 +120,20 @@ const BarcodeModal: React.FC<BarcodeModalProps> = ({ card, onClose, onCardUpdate
 
   // Fonction pour générer un vrai code-barre scannable
   const generateRealBarcode = (number: string) => {
+    console.log('🎯 GENERATION CODE-BARRE - Input:', number);
+
     if (!barcodeCanvasRef.current) {
+      console.log('❌ CANVAS NON DISPONIBLE');
       return false;
     }
 
     const originalNumber = number.trim();
     const initialFormat = getBarcodeFormat(originalNumber);
 
+    console.log('📋 FORMAT INITIAL DETECTE:', initialFormat);
+
     if (!initialFormat) {
+      console.log('❌ AUCUN FORMAT SUPPORTE POUR:', originalNumber);
       return false;
     }
 
@@ -137,6 +143,7 @@ const BarcodeModal: React.FC<BarcodeModalProps> = ({ card, onClose, onCardUpdate
       const ctx = canvas.getContext('2d');
       if (ctx) {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
+        console.log('🧹 CANVAS NETTOYE');
       }
 
       // Choisir le bon numéro et format selon les contraintes
@@ -146,32 +153,40 @@ const BarcodeModal: React.FC<BarcodeModalProps> = ({ card, onClose, onCardUpdate
       // Pour EAN/UPC, utiliser uniquement les chiffres
       if (initialFormat === 'EAN13' || initialFormat === 'EAN8' || initialFormat === 'UPC') {
         const numericOnly = originalNumber.replace(/\D/g, '');
+        console.log('🔢 NUMERIQUE SEULEMENT:', numericOnly, 'longueur:', numericOnly.length);
+
         // Vérifier que le numéro nettoyé a encore la bonne longueur
         if ((initialFormat === 'EAN13' && numericOnly.length === 13) ||
           (initialFormat === 'EAN8' && numericOnly.length === 8) ||
           (initialFormat === 'UPC' && numericOnly.length === 12)) {
           barcodeData = numericOnly;
+          console.log('✅ UTILISATION FORMAT', initialFormat, 'avec:', barcodeData);
         } else {
           // Fallback vers CODE128 si les chiffres seuls ne correspondent pas
           barcodeData = originalNumber;
           finalFormat = 'CODE128';
+          console.log('🔄 FALLBACK vers CODE128 avec:', barcodeData);
         }
       }
 
+      console.log('📊 GENERATION FINALE - Format:', finalFormat, 'Data:', barcodeData);
+
       JsBarcode(canvas, barcodeData, {
         format: finalFormat,
-        width: 1.8, // Un peu plus large
-        height: 60, // Un peu plus haut
+        width: 1.8,
+        height: 60,
         displayValue: true,
-        fontSize: 14, // Police légèrement plus grande
+        fontSize: 14,
         fontOptions: "bold",
         textMargin: 8,
         background: "#ffffff",
         lineColor: "#000000"
       });
 
+      console.log('✅ CODE-BARRE GENERE AVEC SUCCES');
       return true;
     } catch (error) {
+      console.log('💥 ERREUR GENERATION CODE-BARRE:', error);
       return false;
     }
   };
