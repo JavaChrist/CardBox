@@ -29,37 +29,38 @@ export class ImageAnalysisService {
       // Créer une URL pour l'image
       const imageUrl = URL.createObjectURL(imageFile);
 
-      // Analyser en parallèle : OCR, codes-barres ET QR codes
-      const [ocrResult, barcodeResult, qrCodeResult] = await Promise.allSettled([
-        this.performOCR(imageUrl),
-        this.scanBarcodes(imageUrl),
-        this.scanQRCodes(imageFile) // QR codes utilisent le File directement
-      ]);
-
-      // Traiter les résultats QR codes (NOUVELLE PRIORITÉ ABSOLUE)
-      if (qrCodeResult.status === 'fulfilled') {
-        result.qrcodes = qrCodeResult.value;
+      // ÉTAPE 1 : Scanner QR codes EN PREMIER (priorité absolue)
+      console.log('🏆 ETAPE 1/3 : SCAN QR CODES...');
+      try {
+        result.qrcodes = await this.scanQRCodes(imageFile);
         console.log('📱 QR CODES DETECTES:', result.qrcodes);
-      } else {
-        console.log('❌ QR CODES ERREUR:', qrCodeResult.reason);
+      } catch (error) {
+        console.log('❌ QR CODES ERREUR:', error);
+        result.qrcodes = [];
       }
 
-      // Traiter les résultats codes-barres (PRIORITÉ HAUTE)
-      if (barcodeResult.status === 'fulfilled') {
-        result.barcodes = barcodeResult.value;
-        console.log('📊 CODES-BARRES QUAGGAJS:', result.barcodes);
-      } else {
-        console.log('❌ QUAGGAJS ERREUR:', barcodeResult.reason);
+      // ÉTAPE 2 : Scanner codes-barres
+      console.log('✅ ETAPE 2/3 : SCAN CODES-BARRES...');
+      try {
+        result.barcodes = await this.scanBarcodes(imageUrl);
+        console.log('📊 CODES-BARRES DETECTES:', result.barcodes);
+      } catch (error) {
+        console.log('❌ CODES-BARRES ERREUR:', error);
+        result.barcodes = [];
       }
 
-      // Traiter les résultats OCR (FALLBACK)
-      if (ocrResult.status === 'fulfilled') {
-        result.text = ocrResult.value.text;
-        result.numbers = ocrResult.value.numbers;
+      // ÉTAPE 3 : OCR (seulement si pas de QR/codes-barres)
+      console.log('⚠️ ETAPE 3/3 : SCAN OCR...');
+      try {
+        const ocrResult = await this.performOCR(imageUrl);
+        result.text = ocrResult.text;
+        result.numbers = ocrResult.numbers;
         console.log('📝 TEXTE OCR BRUT:', result.text.substring(0, 200));
         console.log('🔢 NUMEROS OCR DETECTES:', result.numbers);
-      } else {
-        console.log('❌ OCR ERREUR:', ocrResult.reason);
+      } catch (error) {
+        console.log('❌ OCR ERREUR:', error);
+        result.text = '';
+        result.numbers = [];
       }
 
       // Nettoyer l'URL
@@ -263,143 +264,84 @@ export class ImageAnalysisService {
     });
   }
 
-  // Scanner les QR codes avec jsQR - VERSION AMÉLIORÉE
+  // Scanner les QR codes avec jsQR - VERSION ULTRA-SIMPLE ET ROBUSTE
   private static async scanQRCodes(imageFile: File): Promise<string[]> {
-    return new Promise((resolve) => {
-      try {
-        console.log('📱 DEBUT SCAN QR CODES AMELIORE...');
+    console.log('📱 DEBUT SCAN QR CODES ULTRA-SIMPLE...');
+    console.log('  📁 Fichier:', imageFile.name, imageFile.size, 'bytes');
 
-        const img = new Image();
-        let imageUrl: string | null = null;
+    try {
+      // Créer une image à partir du fichier
+      const imageUrl = URL.createObjectURL(imageFile);
+      console.log('  🔗 URL créée:', imageUrl.substring(0, 50) + '...');
 
+      const img = new Image();
+
+      // Promesse pour attendre le chargement de l'image
+      const imageLoadPromise = new Promise<HTMLImageElement>((resolve, reject) => {
         img.onload = () => {
-          console.log('🖼️ IMAGE QR CHARGEE:', img.width, 'x', img.height);
-
-          try {
-            // Essayer plusieurs résolutions et traitements
-            const results: string[] = [];
-
-            // TECHNIQUE 1 : Résolution originale
-            const qr1 = this.tryQRScan(img, 1.0, 'Original');
-            if (qr1) results.push(qr1);
-
-            // TECHNIQUE 2 : Haute résolution
-            const qr2 = this.tryQRScan(img, 2.0, 'High-Res');
-            if (qr2 && !results.includes(qr2)) results.push(qr2);
-
-            // TECHNIQUE 3 : Résolution moyenne avec contraste
-            const qr3 = this.tryQRScanWithContrast(img, 1.5, 'Contrast');
-            if (qr3 && !results.includes(qr3)) results.push(qr3);
-
-            // TECHNIQUE 4 : Résolution réduite (parfois mieux pour QR endommagés)
-            const qr4 = this.tryQRScan(img, 0.7, 'Low-Res');
-            if (qr4 && !results.includes(qr4)) results.push(qr4);
-
-            // Cleanup
-            if (imageUrl) {
-              URL.revokeObjectURL(imageUrl);
-            }
-
-            if (results.length > 0) {
-              console.log('✅ QR CODES DETECTES:', results);
-              resolve(results);
-            } else {
-              console.log('❌ AUCUN QR CODE DETECTE (toutes techniques essayées)');
-              resolve([]);
-            }
-
-          } catch (error) {
-            console.log('💥 ERREUR TRAITEMENT QR:', error);
-            if (imageUrl) {
-              URL.revokeObjectURL(imageUrl);
-            }
-            resolve([]); // Ne pas faire échouer, juste retourner vide
-          }
+          console.log('  ✅ Image chargée:', img.width, 'x', img.height);
+          resolve(img);
         };
 
-        img.onerror = () => {
-          console.log('❌ ERREUR CHARGEMENT IMAGE QR');
-          if (imageUrl) {
-            URL.revokeObjectURL(imageUrl);
-          }
-          resolve([]); // Ne pas faire échouer
+        img.onerror = (error) => {
+          console.log('  ❌ Erreur chargement image:', error);
+          reject(new Error('Impossible de charger l\'image'));
         };
 
-        // Charger l'image
-        imageUrl = URL.createObjectURL(imageFile);
+        console.log('  🔄 Chargement image...');
         img.src = imageUrl;
-
-        // Timeout de sécurité
-        setTimeout(() => {
-          console.log('⏰ TIMEOUT QR SCAN (8s)');
-          if (imageUrl) {
-            URL.revokeObjectURL(imageUrl);
-          }
-          resolve([]);
-        }, 8000);
-
-      } catch (error) {
-        console.log('💥 ERREUR QR SCAN GLOBALE:', error);
-        resolve([]); // Ne jamais faire échouer pour ne pas bloquer l'analyse
-      }
-    });
-  }
-
-  // Essayer scan QR avec une résolution donnée
-  private static tryQRScan(img: HTMLImageElement, scale: number, technique: string): string | null {
-    try {
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d')!;
-
-      canvas.width = img.width * scale;
-      canvas.height = img.height * scale;
-
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const qrCode = jsQR(imageData.data, imageData.width, imageData.height, {
-        inversionAttempts: "dontInvert"
       });
 
-      if (qrCode) {
-        console.log(`✅ QR DETECTE (${technique}, scale ${scale}):`, qrCode.data);
-        return qrCode.data;
-      }
+      // Attendre le chargement avec timeout
+      const loadedImg = await Promise.race([
+        imageLoadPromise,
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Timeout chargement image')), 10000)
+        )
+      ]);
 
-      return null;
-    } catch (error) {
-      console.log(`❌ ERREUR QR ${technique}:`, error);
-      return null;
-    }
-  }
+      console.log('  🎯 Image prête pour scan QR');
 
-  // Essayer scan QR avec amélioration de contraste
-  private static tryQRScanWithContrast(img: HTMLImageElement, scale: number, technique: string): string | null {
-    try {
+      // Créer le canvas pour jsQR
       const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d')!;
+      const ctx = canvas.getContext('2d');
 
-      canvas.width = img.width * scale;
-      canvas.height = img.height * scale;
-
-      // Améliorer le contraste pour les QR codes
-      ctx.filter = 'contrast(200%) brightness(120%)';
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const qrCode = jsQR(imageData.data, imageData.width, imageData.height, {
-        inversionAttempts: "attemptBoth"
-      });
-
-      if (qrCode) {
-        console.log(`✅ QR DETECTE (${technique}, scale ${scale}):`, qrCode.data);
-        return qrCode.data;
+      if (!ctx) {
+        throw new Error('Impossible de créer le contexte canvas');
       }
 
-      return null;
+      // Configuration canvas
+      canvas.width = loadedImg.width;
+      canvas.height = loadedImg.height;
+
+      console.log('  🎨 Canvas créé:', canvas.width, 'x', canvas.height);
+
+      // Dessiner l'image
+      ctx.drawImage(loadedImg, 0, 0);
+      console.log('  ✏️ Image dessinée sur canvas');
+
+      // Obtenir les données de l'image
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      console.log('  📊 ImageData récupérée:', imageData.width, 'x', imageData.height);
+
+      // Scanner avec jsQR - VERSION SIMPLE
+      console.log('  🔍 Scan jsQR en cours...');
+      const qrCode = jsQR(imageData.data, imageData.width, imageData.height);
+
+      // Nettoyer l'URL
+      URL.revokeObjectURL(imageUrl);
+
+      if (qrCode) {
+        console.log('  🎉 QR CODE DÉTECTÉ:', qrCode.data);
+        return [qrCode.data];
+      } else {
+        console.log('  ❌ Aucun QR code détecté');
+        return [];
+      }
+
     } catch (error) {
-      console.log(`❌ ERREUR QR ${technique}:`, error);
-      return null;
+      console.log('💥 ERREUR SCAN QR CODES:', error);
+      return [];
     }
   }
 
@@ -519,29 +461,38 @@ export class ImageAnalysisService {
 
       // ✅ LONGUEURS OPTIMALES (basées sur vraies cartes de fidélité)
       if (len === 13) {
-        score += 25; // EAN-13 standard
-        console.log(`  +25 (EAN-13 standard) = ${score}`);
+        score += 30; // Augmenté de 25 à 30 - EAN-13 standard
+        console.log(`  +30 (EAN-13 standard) = ${score}`);
       } else if (len === 8) {
-        score += 20; // EAN-8 court
-        console.log(`  +20 (EAN-8 court) = ${score}`);
+        score += 25; // Augmenté de 20 à 25 - EAN-8 court
+        console.log(`  +25 (EAN-8 court) = ${score}`);
       } else if (len === 12) {
-        score += 18; // UPC-A
-        console.log(`  +18 (UPC-A) = ${score}`);
+        score += 22; // Augmenté de 18 à 22 - UPC-A
+        console.log(`  +22 (UPC-A) = ${score}`);
       } else if (len === 10 || len === 11) {
-        score += 15; // Cartes locales
-        console.log(`  +15 (carte locale) = ${score}`);
-      } else if (len === 14 || len === 15 || len === 16) {
-        score += 10; // Acceptables
-        console.log(`  +10 (longueur acceptable) = ${score}`);
-      } else if (len === 17 || len === 18) {
-        score += 5; // Limites hautes
-        console.log(`  +5 (limite haute) = ${score}`);
+        score += 20; // Augmenté de 15 à 20 - Cartes locales
+        console.log(`  +20 (carte locale) = ${score}`);
+      } else if (len === 9) {
+        score += 18; // Nouveau bonus pour 9 chiffres
+        console.log(`  +18 (9 chiffres) = ${score}`);
+      } else if (len === 14 || len === 15) {
+        score += 10; // Réduit pour favoriser les courts
+        console.log(`  +10 (longueur acceptable 14-15) = ${score}`);
+      } else if (len === 16) {
+        score += 5; // Réduit pour favoriser les courts
+        console.log(`  +5 (longueur limite 16) = ${score}`);
+      } else if (len === 17) {
+        score -= 10; // Nouveau - pénalité pour 17
+        console.log(`  -10 (17 chiffres - suspect) = ${score}`);
+      } else if (len === 18) {
+        score -= 30; // Nouveau - forte pénalité pour 18
+        console.log(`  -30 (18 chiffres - très suspect) = ${score}`);
       } else if (len >= 19) {
-        score -= 50; // FORTE pénalité pour trop long
-        console.log(`  -50 (TROP LONG) = ${score}`);
+        score -= 100; // Augmenté de -50 à -100 - ÉLIMINATION quasi-certaine
+        console.log(`  -100 (≥19 chiffres - ÉLIMINÉ) = ${score}`);
       } else if (len < 8) {
-        score -= 30; // Trop court
-        console.log(`  -30 (trop court) = ${score}`);
+        score -= 40; // Augmenté de -30 à -40 - Trop court
+        console.log(`  -40 (trop court) = ${score}`);
       }
 
       // 🎯 BONUS PATTERNS SPÉCIFIQUES FRANÇAIS
@@ -621,20 +572,26 @@ export class ImageAnalysisService {
   // Détecter les numéros suspects (probablement des erreurs OCR)
   private static isSuspiciousNumber(num: string): boolean {
     // Trop long (probablement parasitage OCR)
-    if (num.length > 20) {
+    if (num.length > 18) { // Abaissé de 20 à 18
       console.log(`  ⚠️ Suspect: trop long (${num.length})`);
       return true;
     }
 
     // Patterns répétitifs excessifs
-    if (/(\d)\1{6,}/.test(num)) { // 7+ chiffres identiques consécutifs
+    if (/(\d)\1{5,}/.test(num)) { // Abaissé de 6+ à 5+ chiffres identiques
       console.log(`  ⚠️ Suspect: répétitions excessives`);
       return true;
     }
 
     // Commencer par des patterns d'erreur OCR
-    if (/^(111111|000000|555555|999999)/.test(num)) {
+    if (/^(111111|000000|555555|999999|123123|734734|260260)/.test(num)) {
       console.log(`  ⚠️ Suspect: commence par pattern d'erreur`);
+      return true;
+    }
+
+    // Séquences suspectes spécifiques
+    if (/734123|260111|111241|412411/.test(num)) {
+      console.log(`  ⚠️ Suspect: contient séquence OCR typique`);
       return true;
     }
 
@@ -647,8 +604,14 @@ export class ImageAnalysisService {
     const maxCount = Math.max(...Object.values(digitCounts) as number[]);
     const dominanceRatio = maxCount / num.length;
 
-    if (dominanceRatio > 0.6) { // Plus de 60% du même chiffre
+    if (dominanceRatio > 0.5) { // Abaissé de 60% à 50%
       console.log(`  ⚠️ Suspect: ${Math.round(dominanceRatio * 100)}% du même chiffre`);
+      return true;
+    }
+
+    // Pattern de numérotation séquentielle
+    if (/123456|234567|345678|456789|987654|876543|765432/.test(num)) {
+      console.log(`  ⚠️ Suspect: séquence numérique`);
       return true;
     }
 
