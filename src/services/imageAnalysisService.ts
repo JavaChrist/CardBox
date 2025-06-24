@@ -33,12 +33,18 @@ export class ImageAnalysisService {
       // Traiter les résultats codes-barres (PRIORITÉ)
       if (barcodeResult.status === 'fulfilled') {
         result.barcodes = barcodeResult.value;
+        console.log('📊 Codes-barres QuaggaJS trouvés:', result.barcodes);
+      } else {
+        console.log('⚠️ QuaggaJS a échoué:', barcodeResult.reason);
       }
 
       // Traiter les résultats OCR (SECONDAIRE)
       if (ocrResult.status === 'fulfilled') {
         result.text = ocrResult.value.text;
         result.numbers = ocrResult.value.numbers;
+        console.log('📝 Numéros OCR trouvés:', result.numbers);
+      } else {
+        console.log('⚠️ OCR a échoué:', ocrResult.reason);
       }
 
       // Nettoyer l'URL
@@ -49,8 +55,11 @@ export class ImageAnalysisService {
 
       // Si on a des codes-barres QuaggaJS, on privilégie totalement
       if (result.barcodes.length > 0) {
+        console.log('🎯 CODES-BARRES DÉTECTÉS ! Ignoring OCR numbers');
         // Garder seulement les codes-barres, ignorer les numéros OCR potentiellement faux
         result.numbers = [];
+      } else {
+        console.log('⚠️ AUCUN CODE-BARRE DÉTECTÉ - Utilisation OCR');
       }
 
       return result;
@@ -92,60 +101,116 @@ export class ImageAnalysisService {
   private static async scanBarcodes(imageUrl: string): Promise<string[]> {
     return new Promise((resolve, reject) => {
       try {
+        console.log('📊 Début scan QuaggaJS...');
         const img = new Image();
         img.onload = () => {
-          // Créer un canvas pour QuaggaJS
+          console.log('🖼️ Image chargée:', img.width, 'x', img.height);
+
+          // Créer un canvas amélioré pour QuaggaJS
           const canvas = document.createElement('canvas');
           const ctx = canvas.getContext('2d')!;
 
-          canvas.width = img.width;
-          canvas.height = img.height;
+          // Augmenter la résolution pour améliorer la détection
+          const scale = Math.max(1, 800 / Math.min(img.width, img.height));
+          canvas.width = img.width * scale;
+          canvas.height = img.height * scale;
+
+          // Améliorer l'image
+          ctx.scale(scale, scale);
+          ctx.imageSmoothingEnabled = false; // Pas de lissage pour garder les détails
           ctx.drawImage(img, 0, 0);
 
-          // Configuration QuaggaJS optimisée
-          Quagga.decodeSingle({
-            src: canvas,
-            numOfWorkers: 0,
-            inputStream: {
-              size: 1200 // Plus haute résolution
+          console.log('🎨 Canvas créé:', canvas.width, 'x', canvas.height);
+
+          // Essayer plusieurs configurations QuaggaJS
+          const configs = [
+            {
+              name: 'Standard',
+              config: {
+                src: canvas,
+                numOfWorkers: 0,
+                inputStream: {
+                  size: Math.max(canvas.width, canvas.height)
+                },
+                locator: {
+                  patchSize: "large" as const,
+                  halfSample: false
+                },
+                decoder: {
+                  readers: [
+                    "ean_reader",
+                    "ean_8_reader",
+                    "upc_reader",
+                    "code_128_reader"
+                  ]
+                }
+              }
             },
-            locator: {
-              patchSize: "large", // Meilleure détection
-              halfSample: false   // Pas de sous-échantillonnage
-            },
-            decoder: {
-              readers: [
-                "ean_reader",      // EAN-13 (priorité)
-                "ean_8_reader",    // EAN-8
-                "upc_reader",      // UPC
-                "code_128_reader", // Code 128
-                "upc_e_reader",    // UPC-E
-                "code_39_reader",  // Code 39
-                "i2of5_reader",    // Interleaved 2 of 5
-                "codabar_reader"   // Codabar
-              ]
+            {
+              name: 'Alternative',
+              config: {
+                src: canvas,
+                numOfWorkers: 0,
+                inputStream: {
+                  size: 600
+                },
+                locator: {
+                  patchSize: "medium" as const,
+                  halfSample: true
+                },
+                decoder: {
+                  readers: [
+                    "code_128_reader",
+                    "ean_reader",
+                    "code_39_reader",
+                    "i2of5_reader"
+                  ]
+                }
+              }
             }
-          }, (result) => {
-            if (result && result.codeResult) {
-              resolve([result.codeResult.code]);
-            } else {
+          ];
+
+          let attempts = 0;
+          const tryNext = () => {
+            if (attempts >= configs.length) {
+              console.log('❌ Toutes les configurations QuaggaJS ont échoué');
               resolve([]);
+              return;
             }
-          });
+
+            const { name, config } = configs[attempts];
+            console.log(`🔄 Tentative ${attempts + 1} (${name})...`);
+
+            Quagga.decodeSingle(config, (result) => {
+              console.log(`🔍 QuaggaJS ${name} résultat:`, result);
+              if (result && result.codeResult) {
+                console.log(`✅ Code-barre détecté (${name}):`, result.codeResult.code);
+                resolve([result.codeResult.code]);
+              } else {
+                attempts++;
+                setTimeout(tryNext, 500); // Délai entre tentatives
+              }
+            });
+          };
+
+          tryNext();
         };
 
         img.onerror = () => {
+          console.log('❌ Erreur chargement image');
           reject(new Error('Impossible de charger l\'image'));
         };
 
         img.src = imageUrl;
 
-        // Timeout de 10 secondes
+        // Timeout plus long pour les multiples tentatives
         setTimeout(() => {
+          console.log('⏰ Timeout QuaggaJS');
           resolve([]);
-        }, 10000);
+        }, 15000);
 
       } catch (error) {
+        console.log('❌ Erreur QuaggaJS:', error);
         reject(error);
       }
     });

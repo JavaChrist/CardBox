@@ -530,13 +530,13 @@ const CardForm = ({ onCardAdded, onCancel }: CardFormProps) => {
                       <div className="flex-1">
                         <h4 className="font-medium text-green-800 mb-2">✅ Informations détectées</h4>
 
-                        {/* Codes-barres détectés */}
+                        {/* Codes-barres détectés (PRIORITÉ) */}
                         {analysisResult.barcodes.length > 0 && (
                           <div className="mb-3">
-                            <p className="text-sm font-medium text-green-700 mb-1">📊 Codes-barres :</p>
+                            <p className="text-sm font-medium text-green-700 mb-1">🎯 Codes-barres (FIABLES) :</p>
                             {analysisResult.barcodes.map((barcode, index) => (
-                              <div key={index} className="flex items-center justify-between bg-white p-2 rounded border">
-                                <span className="font-mono text-sm">{barcode}</span>
+                              <div key={index} className="flex items-center justify-between bg-green-50 p-2 rounded border border-green-200">
+                                <span className="font-mono text-sm font-bold">{barcode}</span>
                                 <button
                                   type="button"
                                   onClick={() => setCardNumber(barcode)}
@@ -546,25 +546,27 @@ const CardForm = ({ onCardAdded, onCancel }: CardFormProps) => {
                                 </button>
                               </div>
                             ))}
+                            <p className="text-xs text-green-600 mt-1">✅ Recommandé: Codes-barres détectés automatiquement</p>
                           </div>
                         )}
 
-                        {/* Numéros détectés */}
+                        {/* Numéros OCR (SECONDAIRE) */}
                         {analysisResult.numbers.length > 0 && (
                           <div className="mb-3">
-                            <p className="text-sm font-medium text-green-700 mb-1">🔢 Numéros détectés :</p>
+                            <p className="text-sm font-medium text-orange-700 mb-1">⚠️ Numéros OCR (moins fiables) :</p>
                             {analysisResult.numbers.slice(0, 3).map((number, index) => (
-                              <div key={index} className="flex items-center justify-between bg-white p-2 rounded border mb-1">
+                              <div key={index} className="flex items-center justify-between bg-orange-50 p-2 rounded border border-orange-200 mb-1">
                                 <span className="font-mono text-sm">{number}</span>
                                 <button
                                   type="button"
                                   onClick={() => setCardNumber(number)}
-                                  className="text-xs bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700"
+                                  className="text-xs bg-orange-600 text-white px-2 py-1 rounded hover:bg-orange-700"
                                 >
                                   Utiliser
                                 </button>
                               </div>
                             ))}
+                            <p className="text-xs text-orange-600 mt-1">⚠️ Vérifiez que ce numéro correspond à votre carte physique</p>
                           </div>
                         )}
 
