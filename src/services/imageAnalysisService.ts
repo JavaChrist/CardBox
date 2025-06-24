@@ -74,8 +74,7 @@ export class ImageAnalysisService {
         imageUrl,
         'eng', // Anglais pour les chiffres (plus performant que français)
         {
-          tessedit_char_whitelist: '0123456789 ', // Seulement chiffres et espaces
-          tessedit_pageseg_mode: '6' // Bloc de texte uniforme
+          // Configuration optimisée pour les numéros
         }
       );
 
@@ -108,11 +107,7 @@ export class ImageAnalysisService {
             src: canvas,
             numOfWorkers: 0,
             inputStream: {
-              size: 1200, // Plus haute résolution
-              constraints: {
-                width: 1280,
-                height: 720
-              }
+              size: 1200 // Plus haute résolution
             },
             locator: {
               patchSize: "large", // Meilleure détection
@@ -129,9 +124,7 @@ export class ImageAnalysisService {
                 "i2of5_reader",    // Interleaved 2 of 5
                 "codabar_reader"   // Codabar
               ]
-            },
-            locate: true,
-            multiple: false
+            }
           }, (result) => {
             if (result && result.codeResult) {
               resolve([result.codeResult.code]);

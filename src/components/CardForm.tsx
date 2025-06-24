@@ -40,7 +40,7 @@ const CardForm = ({ onCardAdded, onCancel }: CardFormProps) => {
   const [customBrandName, setCustomBrandName] = useState('');
   const [cardNumber, setCardNumber] = useState('');
   const [note, setNote] = useState('');
-  const [image, setImage] = useState<File | null>(null);
+  const [, setImage] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
