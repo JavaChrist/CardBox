@@ -47,6 +47,14 @@ const CardForm = ({ onCardAdded, onCancel }: CardFormProps) => {
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [showAnalysisResults, setShowAnalysisResults] = useState(false);
 
+  // DEBUG pour mobile
+  const [debugLogs, setDebugLogs] = useState<string[]>([]);
+  const [showDebug, setShowDebug] = useState(false);
+
+  const addDebugLog = (message: string) => {
+    setDebugLogs(prev => [...prev.slice(-10), `${new Date().toLocaleTimeString()}: ${message}`]);
+  };
+
   const handleBrandSelect = (brand: PopularBrand) => {
     setSelectedBrand(brand);
     setStep('method');
@@ -145,8 +153,22 @@ const CardForm = ({ onCardAdded, onCancel }: CardFormProps) => {
       setAnalyzing(true);
       setAnalysisResult(null);
       setShowAnalysisResults(false);
+      setDebugLogs([]);
+      setShowDebug(true);
+
+      addDebugLog(`🔍 DEBUT ANALYSE: ${file.name} (${file.size} bytes)`);
 
       const result = await ImageAnalysisService.analyzeImage(file);
+
+      addDebugLog(`📊 QuaggaJS: ${result.barcodes.length} codes détectés`);
+      if (result.barcodes.length > 0) {
+        addDebugLog(`✅ CODES: ${result.barcodes.join(', ')}`);
+      }
+
+      addDebugLog(`🔢 OCR: ${result.numbers.length} numéros détectés`);
+      if (result.numbers.length > 0) {
+        addDebugLog(`📝 NUMEROS: ${result.numbers.slice(0, 3).join(', ')}`);
+      }
 
       setAnalysisResult(result);
 
@@ -156,14 +178,18 @@ const CardForm = ({ onCardAdded, onCancel }: CardFormProps) => {
         // PRIORITÉ : Codes-barres détectés par QuaggaJS (plus fiables)
         if (result.barcodes.length > 0) {
           setCardNumber(result.barcodes[0]);
+          addDebugLog(`🎯 UTILISE CODE-BARRE: ${result.barcodes[0]}`);
         }
         // SINON : Numéros détectés par OCR (moins fiables)
         else if (result.numbers.length > 0) {
           setCardNumber(result.numbers[0]);
+          addDebugLog(`⚠️ UTILISE OCR: ${result.numbers[0]}`);
         }
+      } else {
+        addDebugLog(`❌ ECHEC ANALYSE: Aucune info détectée`);
       }
-    } catch {
-      // Erreur silencieuse
+    } catch (error) {
+      addDebugLog(`💥 ERREUR: ${error}`);
     } finally {
       setAnalyzing(false);
     }
@@ -596,6 +622,27 @@ const CardForm = ({ onCardAdded, onCancel }: CardFormProps) => {
                         <p className="font-medium text-yellow-800">⚠️ Aucune information détectée</p>
                         <p className="text-sm text-yellow-700">Vous pouvez saisir manuellement les informations</p>
                       </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* DEBUG pour mobile */}
+                {showDebug && debugLogs.length > 0 && (
+                  <div className="mt-4 p-3 bg-gray-900 text-green-400 rounded-xl text-xs font-mono">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-white font-bold">🔍 DEBUG ANALYSE</span>
+                      <button
+                        type="button"
+                        onClick={() => setShowDebug(false)}
+                        className="text-gray-400 hover:text-white"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                    <div className="max-h-32 overflow-y-auto space-y-1">
+                      {debugLogs.map((log, index) => (
+                        <div key={index} className="text-xs">{log}</div>
+                      ))}
                     </div>
                   </div>
                 )}
