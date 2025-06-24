@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { collection, addDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage, auth } from '../services/firebase';
+import { db, auth } from '../services/firebase';
 import { popularBrands } from '../data/popularBrands';
 import { ImageAnalysisService, type AnalysisResult } from '../services/imageAnalysisService';
 
@@ -95,7 +94,7 @@ const CardForm = ({ onCardAdded, onCancel }: CardFormProps) => {
             document.body.removeChild(input);
           }
         } catch {
-          console.log('Input déjà supprimé');
+          // Input déjà supprimé
         }
       };
 
@@ -106,7 +105,7 @@ const CardForm = ({ onCardAdded, onCancel }: CardFormProps) => {
             document.body.removeChild(input);
           }
         } catch {
-          console.log('Input déjà supprimé');
+          // Input déjà supprimé
         }
       };
 
@@ -120,8 +119,8 @@ const CardForm = ({ onCardAdded, onCancel }: CardFormProps) => {
         input.click();
       }, 100);
 
-    } catch (error) {
-      console.error('Erreur lors de l\'ouverture de la caméra:', error);
+    } catch {
+      // Erreur silencieuse
     }
   };
 
@@ -147,7 +146,6 @@ const CardForm = ({ onCardAdded, onCancel }: CardFormProps) => {
       setAnalysisResult(null);
       setShowAnalysisResults(false);
 
-      console.log('🔍 Analyse de l\'image en cours...');
       const result = await ImageAnalysisService.analyzeImage(file);
 
       setAnalysisResult(result);
@@ -161,13 +159,9 @@ const CardForm = ({ onCardAdded, onCancel }: CardFormProps) => {
         } else if (result.numbers.length > 0) {
           setCardNumber(result.numbers[0]);
         }
-
-        console.log('✅ Analyse terminée avec succès');
-      } else {
-        console.log('ℹ️ Aucune information détectée dans l\'image');
       }
-    } catch (error) {
-      console.error('❌ Erreur lors de l\'analyse:', error);
+    } catch {
+      // Erreur silencieuse
     } finally {
       setAnalyzing(false);
     }
@@ -177,37 +171,25 @@ const CardForm = ({ onCardAdded, onCancel }: CardFormProps) => {
     e.preventDefault();
 
     if (!selectedBrand) {
-      console.error('Aucune marque sélectionnée');
       return;
     }
 
     if (selectedBrand.id === 'divers' && !customBrandName.trim()) {
-      console.error('Nom de marque requis pour les marques personnalisées');
       return;
     }
 
     const user = auth.currentUser;
     if (!user) {
-      console.error('Utilisateur non connecté');
       return;
     }
 
     setLoading(true);
 
     try {
-      let imageUrl = '';
-
-      // Upload de l'image si elle existe
-      if (image) {
-        const imageRef = ref(storage, `cards/${user.uid}/${Date.now()}_${image.name}`);
-        const uploadResult = await uploadBytes(imageRef, image);
-        imageUrl = await getDownloadURL(uploadResult.ref);
-      }
-
       // Utiliser le nom personnalisé si c'est une marque "divers"
       const finalBrandName = selectedBrand.id === 'divers' ? customBrandName.trim() : selectedBrand.name;
 
-      // Sauvegarde en base
+      // Sauvegarde en base (sans photo - juste les données)
       const cardData = {
         name: finalBrandName,
         type: selectedBrand.category,
@@ -215,7 +197,7 @@ const CardForm = ({ onCardAdded, onCancel }: CardFormProps) => {
         logoUrl: selectedBrand.logoUrl,
         cardNumber: cardNumber.trim(),
         note: note.trim(),
-        imageUrl: imageUrl || '',
+        imageUrl: '', // Plus de stockage d'images
         userId: user.uid,
         createdAt: new Date()
       };
@@ -240,9 +222,8 @@ const CardForm = ({ onCardAdded, onCancel }: CardFormProps) => {
       setShowAnalysisResults(false);
 
       onCardAdded(newCard);
-    } catch (error) {
-      console.error('Erreur lors de l\'ajout de la carte:', error);
-      // L'erreur sera affichée dans la console
+    } catch {
+      // Erreur silencieuse
     } finally {
       setLoading(false);
     }

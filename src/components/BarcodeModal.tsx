@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { doc, updateDoc, deleteDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
-import { db, storage, auth } from '../services/firebase';
+import { db, auth } from '../services/firebase';
 import JsBarcode from 'jsbarcode';
 
 interface Card {
@@ -131,8 +130,7 @@ const BarcodeModal: React.FC<BarcodeModalProps> = ({ card, onClose, onCardUpdate
         lineColor: "#000000"
       });
       return true;
-    } catch (error) {
-      console.error('Erreur génération code-barre:', error);
+    } catch {
       return false;
     }
   };
@@ -168,8 +166,6 @@ const BarcodeModal: React.FC<BarcodeModalProps> = ({ card, onClose, onCardUpdate
   const handleUpdateCard = async () => {
     setLoading(true);
     try {
-      console.log('🔄 Début de la mise à jour de la carte:', card.id);
-
       const user = auth.currentUser;
       if (!user) {
         showNotification('error', 'Vous devez être connecté pour modifier une carte');
@@ -181,33 +177,10 @@ const BarcodeModal: React.FC<BarcodeModalProps> = ({ card, onClose, onCardUpdate
         note: editNote.trim()
       };
 
-      console.log('📝 Données à mettre à jour:', updates);
-
-      // Upload nouvelle image si sélectionnée
-      if (editImage) {
-        console.log('📸 Upload de la nouvelle image...');
-        const imageRef = ref(storage, `cards/${user.uid}/${Date.now()}_${editImage.name}`);
-        const uploadResult = await uploadBytes(imageRef, editImage);
-        const newImageUrl = await getDownloadURL(uploadResult.ref);
-        updates.imageUrl = newImageUrl;
-        console.log('✅ Nouvelle image uploadée:', newImageUrl);
-
-        // Supprimer ancienne image si elle existe
-        if (card.imageUrl && card.imageUrl.includes('firebase')) {
-          try {
-            const oldImageRef = ref(storage, card.imageUrl);
-            await deleteObject(oldImageRef);
-            console.log('🗑️ Ancienne image supprimée');
-          } catch (error) {
-            console.log('Ancienne image déjà supprimée:', error);
-          }
-        }
-      }
+      // Plus de gestion d'images - juste les données
 
       // Mettre à jour le document
-      console.log('💾 Mise à jour du document Firestore...');
       await updateDoc(doc(db, 'cards', card.id), updates);
-      console.log('✅ Document mis à jour avec succès');
 
       // Fermer modals et actualiser
       setShowEditCard(false);
@@ -227,8 +200,7 @@ const BarcodeModal: React.FC<BarcodeModalProps> = ({ card, onClose, onCardUpdate
         onClose();
       }, 1500);
 
-    } catch (error) {
-      console.error('❌ Erreur lors de la mise à jour:', error);
+    } catch {
       showNotification('error', 'Erreur lors de la mise à jour de la carte');
     } finally {
       setLoading(false);
@@ -238,30 +210,16 @@ const BarcodeModal: React.FC<BarcodeModalProps> = ({ card, onClose, onCardUpdate
   const handleDeleteCard = async () => {
     setLoading(true);
     try {
-      console.log('🗑️ Début de la suppression de la carte:', card.id);
-
       const user = auth.currentUser;
       if (!user) {
         showNotification('error', 'Vous devez être connecté pour supprimer une carte');
         return;
       }
 
-      // Supprimer l'image du Storage si elle existe
-      if (card.imageUrl && card.imageUrl.includes('firebase')) {
-        try {
-          console.log('📸 Suppression de l\'image du Storage...');
-          const imageRef = ref(storage, card.imageUrl);
-          await deleteObject(imageRef);
-          console.log('✅ Image supprimée du Storage');
-        } catch (error) {
-          console.log('Image déjà supprimée:', error);
-        }
-      }
+      // Plus de gestion d'images dans le storage
 
       // Supprimer le document
-      console.log('💾 Suppression du document Firestore...');
       await deleteDoc(doc(db, 'cards', card.id));
-      console.log('✅ Document supprimé avec succès');
 
       showNotification('success', 'Carte supprimée avec succès !');
 
@@ -275,8 +233,7 @@ const BarcodeModal: React.FC<BarcodeModalProps> = ({ card, onClose, onCardUpdate
         onClose();
       }, 1500);
 
-    } catch (error) {
-      console.error('❌ Erreur lors de la suppression:', error);
+    } catch {
       showNotification('error', 'Erreur lors de la suppression de la carte');
     } finally {
       setLoading(false);

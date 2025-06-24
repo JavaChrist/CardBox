@@ -26,8 +26,8 @@ const Dashboard = () => {
   const handleLogout = async () => {
     try {
       await signOut(auth);
-    } catch (error) {
-      console.error('Erreur lors de la déconnexion:', error);
+    } catch {
+      // Silencieux - l'utilisateur sera redirigé de toute façon
     }
   };
 
@@ -51,10 +51,8 @@ const Dashboard = () => {
       if (user) {
         const userCards = await cardService.getUserCards(user.uid);
         setCards(userCards);
-        console.log(`✅ ${userCards.length} cartes chargées depuis Firebase`);
       }
-    } catch (error: unknown) {
-      console.error('Erreur lors du chargement des cartes:', error);
+    } catch {
       setCards([]);
     } finally {
       setLoading(false);

@@ -14,8 +14,6 @@ export class ImageAnalysisService {
   // Analyser une image pour extraire codes-barres et texte
   static async analyzeImage(imageFile: File): Promise<AnalysisResult> {
     try {
-      console.log('🔍 Début de l\'analyse de l\'image...');
-
       const result: AnalysisResult = {
         barcodes: [],
         text: '',
@@ -36,20 +34,11 @@ export class ImageAnalysisService {
       if (ocrResult.status === 'fulfilled') {
         result.text = ocrResult.value.text;
         result.numbers = ocrResult.value.numbers;
-        console.log('✅ OCR terminé - TEXTE BRUT:');
-        console.log('   📄 Texte détecté:', result.text);
-        console.log('   🔢 Numéros extraits:', result.numbers);
-        console.log('   📏 Longueur texte:', result.text.length);
-      } else {
-        console.warn('⚠️ Erreur OCR:', ocrResult.reason);
       }
 
       // Traiter les résultats codes-barres
       if (barcodeResult.status === 'fulfilled') {
         result.barcodes = barcodeResult.value;
-        console.log('✅ Scan codes-barres terminé:', result.barcodes);
-      } else {
-        console.warn('⚠️ Erreur scan codes-barres:', barcodeResult.reason);
       }
 
       // Nettoyer l'URL
@@ -58,11 +47,9 @@ export class ImageAnalysisService {
       // Déterminer le succès
       result.success = result.barcodes.length > 0 || result.numbers.length > 0 || result.text.length > 10;
 
-      console.log('🎯 Analyse terminée:', result);
       return result;
 
     } catch (error) {
-      console.error('❌ Erreur lors de l\'analyse:', error);
       return {
         barcodes: [],
         text: '',
@@ -76,35 +63,22 @@ export class ImageAnalysisService {
   // OCR avec Tesseract.js
   private static async performOCR(imageUrl: string): Promise<{ text: string; numbers: string[] }> {
     try {
-      console.log('📖 Début OCR...');
-
       // Configuration OCR optimisée pour les codes-barres et numéros
       const { data: { text } } = await Tesseract.recognize(
         imageUrl,
         'eng', // Anglais pour les chiffres (plus performant que français)
         {
-          logger: m => {
-            if (m.status === 'recognizing text') {
-              console.log(`OCR Progress: ${Math.round(m.progress * 100)}%`);
-            }
-          },
           tessedit_char_whitelist: '0123456789 ', // Seulement chiffres et espaces
           tessedit_pageseg_mode: '6' // Bloc de texte uniforme
         }
       );
 
-      console.log('🔍 OCR ANALYSE DETAILLEE:');
-      console.log('   📄 Texte brut:', JSON.stringify(text));
-      console.log('   📏 Longueur:', text.length);
-
       // Extraire les numéros de carte potentiels
       const numbers = this.extractCardNumbers(text);
-      console.log('   🎯 Numéros finaux extraits:', numbers);
 
       return { text, numbers };
 
     } catch (error) {
-      console.error('❌ Erreur OCR:', error);
       throw error;
     }
   }
@@ -113,8 +87,6 @@ export class ImageAnalysisService {
   private static async scanBarcodes(imageUrl: string): Promise<string[]> {
     return new Promise((resolve, reject) => {
       try {
-        console.log('📊 Début scan codes-barres...');
-
         const img = new Image();
         img.onload = () => {
           // Créer un canvas pour QuaggaJS
@@ -151,10 +123,8 @@ export class ImageAnalysisService {
             }
           }, (result) => {
             if (result && result.codeResult) {
-              console.log('✅ Code-barre détecté:', result.codeResult.code);
               resolve([result.codeResult.code]);
             } else {
-              console.log('ℹ️ Aucun code-barre détecté');
               resolve([]);
             }
           });
@@ -172,7 +142,6 @@ export class ImageAnalysisService {
         }, 10000);
 
       } catch (error) {
-        console.error('❌ Erreur scan codes-barres:', error);
         reject(error);
       }
     });
@@ -181,27 +150,23 @@ export class ImageAnalysisService {
   // Extraire les numéros de carte du texte OCR
   private static extractCardNumbers(text: string): string[] {
     const numbers: string[] = [];
-    console.log('🔍 EXTRACTION DÉTAILLÉE:');
-    console.log('   📄 Texte d\'entrée:', JSON.stringify(text));
 
-    // Patterns pour différents types de numéros de carte (plus agressifs)
+    // Patterns pour différents types de numéros de carte
     const patterns = [
-      { name: 'Longs (13-19 chiffres)', pattern: /\b\d{13,19}\b/g },
-      { name: 'Moyens (8-12 chiffres)', pattern: /\b\d{8,12}\b/g },
-      { name: 'Format 4-4-4-4', pattern: /\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/g },
-      { name: 'Format Amex', pattern: /\b\d{4}[\s-]?\d{6}[\s-]?\d{5}\b/g },
-      { name: 'Tous chiffres consécutifs', pattern: /\d{8,}/g }, // Plus agressif
+      /\b\d{13,19}\b/g, // Longs (13-19 chiffres)
+      /\b\d{8,12}\b/g, // Moyens (8-12 chiffres)
+      /\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/g, // Format 4-4-4-4
+      /\b\d{4}[\s-]?\d{6}[\s-]?\d{5}\b/g, // Format Amex
+      /\d{8,}/g, // Tous chiffres consécutifs
     ];
 
-    patterns.forEach(({ name, pattern }) => {
+    patterns.forEach(pattern => {
       const matches = text.match(pattern);
-      console.log(`   🎯 Pattern "${name}":`, matches);
       if (matches) {
         matches.forEach(match => {
           const cleanNumber = match.replace(/[\s-]/g, '');
           if (cleanNumber.length >= 8 && !numbers.includes(cleanNumber)) {
             numbers.push(cleanNumber);
-            console.log(`   ✅ Numéro ajouté: ${cleanNumber} (longueur: ${cleanNumber.length})`);
           }
         });
       }
@@ -209,25 +174,21 @@ export class ImageAnalysisService {
 
     // Chercher aussi les numéros après des mots-clés
     const keywords = ['carte', 'card', 'number', 'numéro', 'n°', 'num', 'client', 'member', 'code'];
-    console.log('   🔍 Recherche par mots-clés...');
     keywords.forEach(keyword => {
       const regex = new RegExp(`${keyword}[^\\d]*([\\d\\s-]{8,20})`, 'gi');
       const matches = text.match(regex);
       if (matches) {
-        console.log(`   🎯 Mot-clé "${keyword}":`, matches);
         matches.forEach(match => {
           const numberPart = match.replace(/[^\d\s-]/g, '').replace(/[\s-]/g, '');
           if (numberPart.length >= 8 && !numbers.includes(numberPart)) {
             numbers.push(numberPart);
-            console.log(`   ✅ Numéro ajouté (mot-clé): ${numberPart}`);
           }
         });
       }
     });
 
     // Extraction brute de TOUS les chiffres (dernière chance)
-    const allDigits = text.replace(/\D/g, ''); // Enlever tout sauf chiffres
-    console.log('   🔥 Tous les chiffres bruts:', allDigits);
+    const allDigits = text.replace(/\D/g, '');
     if (allDigits.length >= 8) {
       // Essayer de découper en segments significatifs
       for (let start = 0; start <= allDigits.length - 8; start++) {
@@ -236,7 +197,6 @@ export class ImageAnalysisService {
             const segment = allDigits.substring(start, start + len);
             if (!numbers.includes(segment)) {
               numbers.push(segment);
-              console.log(`   ✅ Segment brut ajouté: ${segment}`);
               break; // Prendre le plus long segment à chaque position
             }
           }
@@ -244,11 +204,8 @@ export class ImageAnalysisService {
       }
     }
 
-    console.log('   🎯 RÉSULTAT FINAL:', numbers);
-
     // Choisir le meilleur numéro automatiquement
     const bestNumber = this.selectBestNumber(numbers);
-    console.log('   ⭐ MEILLEUR NUMÉRO SÉLECTIONNÉ:', bestNumber);
 
     return bestNumber ? [bestNumber] : numbers;
   }
@@ -257,8 +214,6 @@ export class ImageAnalysisService {
   private static selectBestNumber(numbers: string[]): string | null {
     if (numbers.length === 0) return null;
     if (numbers.length === 1) return numbers[0];
-
-    console.log('🏆 SÉLECTION DU MEILLEUR NUMÉRO:');
 
     // Scores pour chaque numéro
     const scored = numbers.map(num => {
@@ -283,18 +238,13 @@ export class ImageAnalysisService {
       const trailingZeros = num.match(/0*$/)?.[0]?.length || 0;
       if (trailingZeros > 3) score -= trailingZeros;
 
-      console.log(`   ${num} → Score: ${score} (len:${len}, unique:${uniqueDigits}, trailing0s:${trailingZeros})`);
-
       return { number: num, score };
     });
 
     // Trier par score décroissant
     scored.sort((a, b) => b.score - a.score);
 
-    const winner = scored[0];
-    console.log(`   🥇 GAGNANT: ${winner.number} (score: ${winner.score})`);
-
-    return winner.number;
+    return scored[0].number;
   }
 
   // Formater les résultats pour l'affichage
