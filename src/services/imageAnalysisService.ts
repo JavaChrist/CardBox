@@ -68,18 +68,27 @@ export class ImageAnalysisService {
       // Déterminer le succès
       result.success = result.qrcodes.length > 0 || result.barcodes.length > 0 || result.numbers.length > 0 || result.text.length > 10;
 
-      // PRIORITÉ : QR codes > Codes-barres > OCR
+      // PRIORITÉ ABSOLUE : QR codes > Codes-barres > OCR
       if (result.qrcodes.length > 0) {
-        console.log('🎯 QR CODES DETECTES - Priorité absolue');
-        result.numbers = []; // Ignorer OCR si QR code détecté
+        console.log('🏆 QR CODES DETECTES - Priorité absolue activée');
+        // Garder OCR comme alternatives mais QR codes en priorité
+        console.log('🏆 Mode QR : QR codes prioritaires, OCR comme alternatives');
       } else if (result.barcodes.length > 0) {
-        console.log('🎯 CODES-BARRES DETECTES - Ignorant OCR');
-        result.numbers = []; // Ignorer OCR si code-barre détecté
+        console.log('✅ CODES-BARRES DETECTES - Priorité haute activée');
+        // Réduire les alternatives OCR si codes-barres détectés
+        result.numbers = result.numbers.slice(0, 2); // Max 2 alternatives OCR
+        console.log('✅ Mode Codes-barres : QR codes + codes-barres prioritaires, OCR limité');
       } else {
-        console.log('⚠️ AUCUN QR/CODE-BARRE - Utilisation OCR seulement');
+        console.log('⚠️ AUCUN QR/CODE-BARRE - Mode OCR pur');
       }
 
-      console.log('✅ RESULTAT FINAL:', result);
+      // Debug final pour vérification
+      console.log('🎯 ETAT FINAL PRIORITES:');
+      console.log('  📱 QR Codes:', result.qrcodes.length);
+      console.log('  📊 Codes-barres:', result.barcodes.length);
+      console.log('  🔢 Numéros OCR:', result.numbers.length);
+
+      console.log('✅ ANALYSE TERMINEE - RESULTAT:', result);
       return result;
 
     } catch (error) {
@@ -254,11 +263,11 @@ export class ImageAnalysisService {
     });
   }
 
-  // Scanner les QR codes avec jsQR
+  // Scanner les QR codes avec jsQR - VERSION AMÉLIORÉE
   private static async scanQRCodes(imageFile: File): Promise<string[]> {
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       try {
-        console.log('📱 DEBUT SCAN QR CODES...');
+        console.log('📱 DEBUT SCAN QR CODES AMELIORE...');
 
         const img = new Image();
         let imageUrl: string | null = null;
@@ -267,42 +276,44 @@ export class ImageAnalysisService {
           console.log('🖼️ IMAGE QR CHARGEE:', img.width, 'x', img.height);
 
           try {
-            // Créer un canvas pour jsQR
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d')!;
+            // Essayer plusieurs résolutions et traitements
+            const results: string[] = [];
 
-            // Redimensionner pour optimiser la détection QR
-            const scale = Math.min(800 / img.width, 800 / img.height, 1);
-            canvas.width = img.width * scale;
-            canvas.height = img.height * scale;
+            // TECHNIQUE 1 : Résolution originale
+            const qr1 = this.tryQRScan(img, 1.0, 'Original');
+            if (qr1) results.push(qr1);
 
-            // Dessiner l'image sur le canvas
-            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            // TECHNIQUE 2 : Haute résolution
+            const qr2 = this.tryQRScan(img, 2.0, 'High-Res');
+            if (qr2 && !results.includes(qr2)) results.push(qr2);
 
-            // Obtenir les données d'image
-            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            // TECHNIQUE 3 : Résolution moyenne avec contraste
+            const qr3 = this.tryQRScanWithContrast(img, 1.5, 'Contrast');
+            if (qr3 && !results.includes(qr3)) results.push(qr3);
 
-            // Scanner le QR code
-            const qrCode = jsQR(imageData.data, imageData.width, imageData.height);
+            // TECHNIQUE 4 : Résolution réduite (parfois mieux pour QR endommagés)
+            const qr4 = this.tryQRScan(img, 0.7, 'Low-Res');
+            if (qr4 && !results.includes(qr4)) results.push(qr4);
 
-            // Cleanup de l'URL
+            // Cleanup
             if (imageUrl) {
               URL.revokeObjectURL(imageUrl);
             }
 
-            if (qrCode) {
-              console.log('✅ QR CODE DETECTE:', qrCode.data);
-              resolve([qrCode.data]);
+            if (results.length > 0) {
+              console.log('✅ QR CODES DETECTES:', results);
+              resolve(results);
             } else {
-              console.log('❌ AUCUN QR CODE DETECTE');
+              console.log('❌ AUCUN QR CODE DETECTE (toutes techniques essayées)');
               resolve([]);
             }
+
           } catch (error) {
             console.log('💥 ERREUR TRAITEMENT QR:', error);
             if (imageUrl) {
               URL.revokeObjectURL(imageUrl);
             }
-            reject(error);
+            resolve([]); // Ne pas faire échouer, juste retourner vide
           }
         };
 
@@ -311,27 +322,85 @@ export class ImageAnalysisService {
           if (imageUrl) {
             URL.revokeObjectURL(imageUrl);
           }
-          reject(new Error('Impossible de charger l\'image pour QR scan'));
+          resolve([]); // Ne pas faire échouer
         };
 
         // Charger l'image
         imageUrl = URL.createObjectURL(imageFile);
         img.src = imageUrl;
 
-        // Timeout pour éviter les blocages
+        // Timeout de sécurité
         setTimeout(() => {
-          console.log('⏰ TIMEOUT QR SCAN (10s)');
+          console.log('⏰ TIMEOUT QR SCAN (8s)');
           if (imageUrl) {
             URL.revokeObjectURL(imageUrl);
           }
           resolve([]);
-        }, 10000);
+        }, 8000);
 
       } catch (error) {
         console.log('💥 ERREUR QR SCAN GLOBALE:', error);
-        reject(error);
+        resolve([]); // Ne jamais faire échouer pour ne pas bloquer l'analyse
       }
     });
+  }
+
+  // Essayer scan QR avec une résolution donnée
+  private static tryQRScan(img: HTMLImageElement, scale: number, technique: string): string | null {
+    try {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d')!;
+
+      canvas.width = img.width * scale;
+      canvas.height = img.height * scale;
+
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const qrCode = jsQR(imageData.data, imageData.width, imageData.height, {
+        inversionAttempts: "dontInvert"
+      });
+
+      if (qrCode) {
+        console.log(`✅ QR DETECTE (${technique}, scale ${scale}):`, qrCode.data);
+        return qrCode.data;
+      }
+
+      return null;
+    } catch (error) {
+      console.log(`❌ ERREUR QR ${technique}:`, error);
+      return null;
+    }
+  }
+
+  // Essayer scan QR avec amélioration de contraste
+  private static tryQRScanWithContrast(img: HTMLImageElement, scale: number, technique: string): string | null {
+    try {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d')!;
+
+      canvas.width = img.width * scale;
+      canvas.height = img.height * scale;
+
+      // Améliorer le contraste pour les QR codes
+      ctx.filter = 'contrast(200%) brightness(120%)';
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const qrCode = jsQR(imageData.data, imageData.width, imageData.height, {
+        inversionAttempts: "attemptBoth"
+      });
+
+      if (qrCode) {
+        console.log(`✅ QR DETECTE (${technique}, scale ${scale}):`, qrCode.data);
+        return qrCode.data;
+      }
+
+      return null;
+    } catch (error) {
+      console.log(`❌ ERREUR QR ${technique}:`, error);
+      return null;
+    }
   }
 
   // Extraire les numéros de carte du texte OCR
