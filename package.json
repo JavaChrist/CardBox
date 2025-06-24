@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "firebase": "^11.9.1",
+    "jsbarcode": "^3.12.1",
     "quagga": "^0.12.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",

@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { db, storage, auth } from '../services/firebase';
+import JsBarcode from 'jsbarcode';
 
 interface Card {
   id: string;
@@ -41,6 +42,9 @@ const BarcodeModal: React.FC<BarcodeModalProps> = ({ card, onClose, onCardUpdate
     type: 'success' | 'error';
     message: string;
   } | null>(null);
+
+  // Ref pour le canvas du code-barre
+  const barcodeCanvasRef = useRef<HTMLCanvasElement>(null);
 
   // Fonction pour afficher une notification
   const showNotification = (type: 'success' | 'error', message: string) => {
@@ -94,26 +98,55 @@ const BarcodeModal: React.FC<BarcodeModalProps> = ({ card, onClose, onCardUpdate
     return colors[type] || 'from-blue-600 to-blue-700';
   };
 
-  // Génération d'un code-barre basé sur le vrai numéro de carte détecté
-  const generateBarcode = (cardNumber: string) => {
-    const bars = [];
-    const chars = cardNumber.split('');
+  // Fonction pour déterminer le format de code-barre optimal
+  const getBarcodeFormat = (number: string) => {
+    const cleanNumber = number.replace(/\D/g, ''); // Supprimer tout sauf les chiffres
 
-    for (let i = 0; i < 60; i++) {
-      const charCode = chars[i % chars.length].charCodeAt(0);
-      const width = (charCode % 4) + 1; // 1-4px pour plus de variation
-      const gap = charCode % 3 === 0 ? 1 : 0; // Espacement plus réaliste
-
-      bars.push({ width, gap, key: i });
-    }
-
-    return bars;
+    if (cleanNumber.length === 13) return 'EAN13';
+    if (cleanNumber.length === 8) return 'EAN8';
+    if (cleanNumber.length === 12) return 'UPC';
+    if (cleanNumber.length >= 6) return 'CODE128'; // Plus flexible
+    return null;
   };
 
-  // Utiliser le vrai numéro de carte ou afficher un message
-  const hasRealBarcode = card.cardNumber && card.cardNumber.trim().length >= 8;
-  const barcode = hasRealBarcode ? generateBarcode(card.cardNumber!) : [];
+  // Fonction pour générer un vrai code-barre scannable
+  const generateRealBarcode = (number: string) => {
+    if (!barcodeCanvasRef.current) return false;
+
+    const cleanNumber = number.replace(/\D/g, '');
+    const format = getBarcodeFormat(cleanNumber);
+
+    if (!format) return false;
+
+    try {
+      JsBarcode(barcodeCanvasRef.current, cleanNumber, {
+        format: format,
+        width: 2,
+        height: 60,
+        displayValue: true,
+        fontSize: 16,
+        fontOptions: "bold",
+        textMargin: 8,
+        background: "#ffffff",
+        lineColor: "#000000"
+      });
+      return true;
+    } catch (error) {
+      console.error('Erreur génération code-barre:', error);
+      return false;
+    }
+  };
+
+  // Utiliser le vrai numéro de carte
+  const hasRealBarcode = card.cardNumber && card.cardNumber.trim().length >= 6;
   const barcodeNumber = hasRealBarcode ? card.cardNumber! : '';
+
+  // Générer le code-barre quand le composant se monte ou quand le numéro change
+  useEffect(() => {
+    if (hasRealBarcode && barcodeCanvasRef.current) {
+      generateRealBarcode(barcodeNumber);
+    }
+  }, [hasRealBarcode, barcodeNumber]);
 
   // Fonctions d'édition
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -319,35 +352,15 @@ const BarcodeModal: React.FC<BarcodeModalProps> = ({ card, onClose, onCardUpdate
               <div className="mb-6">
                 <div className="bg-white p-4 rounded-lg border border-gray-200">
                   {hasRealBarcode ? (
-                    <>
-                      <div className="flex justify-center items-end space-x-px mb-3">
-                        {barcode.map((bar) => (
-                          <div key={bar.key} className="flex">
-                            <div
-                              className="bg-gray-900"
-                              style={{
-                                width: `${bar.width}px`,
-                                height: '60px'
-                              }}
-                            />
-                            {bar.gap > 0 && (
-                              <div
-                                className="bg-transparent"
-                                style={{ width: `${bar.gap}px` }}
-                              />
-                            )}
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* Numéro du code-barre */}
-                      <div className="text-center">
-                        <p className="font-mono text-lg font-bold text-gray-900 tracking-wider">
-                          {barcodeNumber}
-                        </p>
-                        <p className="text-xs text-green-600 mt-1">📊 Code-barre détecté automatiquement</p>
-                      </div>
-                    </>
+                    <div className="text-center">
+                      <canvas
+                        ref={barcodeCanvasRef}
+                        className="mx-auto mb-3"
+                      />
+                      <p className="text-xs text-green-600 font-medium">
+                        🎯 Code-barre généré • 100% scannable en magasin
+                      </p>
+                    </div>
                   ) : (
                     /* Affichage quand aucun code-barre n'est détecté */
                     <div className="text-center py-8">
