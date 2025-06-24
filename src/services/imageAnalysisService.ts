@@ -36,7 +36,10 @@ export class ImageAnalysisService {
       if (ocrResult.status === 'fulfilled') {
         result.text = ocrResult.value.text;
         result.numbers = ocrResult.value.numbers;
-        console.log('✅ OCR terminé:', result.text);
+        console.log('✅ OCR terminé - TEXTE BRUT:');
+        console.log('   📄 Texte détecté:', result.text);
+        console.log('   🔢 Numéros extraits:', result.numbers);
+        console.log('   📏 Longueur texte:', result.text.length);
       } else {
         console.warn('⚠️ Erreur OCR:', ocrResult.reason);
       }
@@ -75,20 +78,28 @@ export class ImageAnalysisService {
     try {
       console.log('📖 Début OCR...');
 
+      // Configuration OCR optimisée pour les codes-barres et numéros
       const { data: { text } } = await Tesseract.recognize(
         imageUrl,
-        'fra', // Français
+        'eng', // Anglais pour les chiffres (plus performant que français)
         {
           logger: m => {
             if (m.status === 'recognizing text') {
               console.log(`OCR Progress: ${Math.round(m.progress * 100)}%`);
             }
-          }
+          },
+          tessedit_char_whitelist: '0123456789 ', // Seulement chiffres et espaces
+          tessedit_pageseg_mode: '6' // Bloc de texte uniforme
         }
       );
 
+      console.log('🔍 OCR ANALYSE DETAILLEE:');
+      console.log('   📄 Texte brut:', JSON.stringify(text));
+      console.log('   📏 Longueur:', text.length);
+
       // Extraire les numéros de carte potentiels
       const numbers = this.extractCardNumbers(text);
+      console.log('   🎯 Numéros finaux extraits:', numbers);
 
       return { text, numbers };
 
@@ -170,42 +181,70 @@ export class ImageAnalysisService {
   // Extraire les numéros de carte du texte OCR
   private static extractCardNumbers(text: string): string[] {
     const numbers: string[] = [];
+    console.log('🔍 EXTRACTION DÉTAILLÉE:');
+    console.log('   📄 Texte d\'entrée:', JSON.stringify(text));
 
-    // Patterns pour différents types de numéros de carte
+    // Patterns pour différents types de numéros de carte (plus agressifs)
     const patterns = [
-      /\b\d{13,19}\b/g, // Numéros de carte standards (13-19 chiffres)
-      /\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/g, // Format 4-4-4-4
-      /\b\d{4}[\s-]?\d{6}[\s-]?\d{5}\b/g, // Format Amex
-      /\b\d{10,12}\b/g, // Numéros plus courts
+      { name: 'Longs (13-19 chiffres)', pattern: /\b\d{13,19}\b/g },
+      { name: 'Moyens (8-12 chiffres)', pattern: /\b\d{8,12}\b/g },
+      { name: 'Format 4-4-4-4', pattern: /\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/g },
+      { name: 'Format Amex', pattern: /\b\d{4}[\s-]?\d{6}[\s-]?\d{5}\b/g },
+      { name: 'Tous chiffres consécutifs', pattern: /\d{8,}/g }, // Plus agressif
     ];
 
-    patterns.forEach(pattern => {
+    patterns.forEach(({ name, pattern }) => {
       const matches = text.match(pattern);
+      console.log(`   🎯 Pattern "${name}":`, matches);
       if (matches) {
         matches.forEach(match => {
           const cleanNumber = match.replace(/[\s-]/g, '');
           if (cleanNumber.length >= 8 && !numbers.includes(cleanNumber)) {
             numbers.push(cleanNumber);
+            console.log(`   ✅ Numéro ajouté: ${cleanNumber} (longueur: ${cleanNumber.length})`);
           }
         });
       }
     });
 
     // Chercher aussi les numéros après des mots-clés
-    const keywords = ['carte', 'card', 'number', 'numéro', 'n°', 'num', 'client', 'member'];
+    const keywords = ['carte', 'card', 'number', 'numéro', 'n°', 'num', 'client', 'member', 'code'];
+    console.log('   🔍 Recherche par mots-clés...');
     keywords.forEach(keyword => {
       const regex = new RegExp(`${keyword}[^\\d]*([\\d\\s-]{8,20})`, 'gi');
       const matches = text.match(regex);
       if (matches) {
+        console.log(`   🎯 Mot-clé "${keyword}":`, matches);
         matches.forEach(match => {
           const numberPart = match.replace(/[^\d\s-]/g, '').replace(/[\s-]/g, '');
           if (numberPart.length >= 8 && !numbers.includes(numberPart)) {
             numbers.push(numberPart);
+            console.log(`   ✅ Numéro ajouté (mot-clé): ${numberPart}`);
           }
         });
       }
     });
 
+    // Extraction brute de TOUS les chiffres (dernière chance)
+    const allDigits = text.replace(/\D/g, ''); // Enlever tout sauf chiffres
+    console.log('   🔥 Tous les chiffres bruts:', allDigits);
+    if (allDigits.length >= 8) {
+      // Essayer de découper en segments significatifs
+      for (let start = 0; start <= allDigits.length - 8; start++) {
+        for (let len = 19; len >= 8; len--) {
+          if (start + len <= allDigits.length) {
+            const segment = allDigits.substring(start, start + len);
+            if (!numbers.includes(segment)) {
+              numbers.push(segment);
+              console.log(`   ✅ Segment brut ajouté: ${segment}`);
+              break; // Prendre le plus long segment à chaque position
+            }
+          }
+        }
+      }
+    }
+
+    console.log('   🎯 RÉSULTAT FINAL:', numbers);
     return numbers;
   }
 
