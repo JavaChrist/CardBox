@@ -121,12 +121,12 @@ const BarcodeModal: React.FC<BarcodeModalProps> = ({ card, onClose, onCardUpdate
     try {
       JsBarcode(barcodeCanvasRef.current, cleanNumber, {
         format: format,
-        width: 2,
-        height: 60,
+        width: 1.5, // Plus fin pour mobile
+        height: 50, // Plus court pour mobile
         displayValue: true,
-        fontSize: 16,
+        fontSize: 12, // Police plus petite
         fontOptions: "bold",
-        textMargin: 8,
+        textMargin: 6,
         background: "#ffffff",
         lineColor: "#000000"
       });
@@ -141,28 +141,13 @@ const BarcodeModal: React.FC<BarcodeModalProps> = ({ card, onClose, onCardUpdate
   const hasRealBarcode = card.cardNumber && card.cardNumber.trim().length >= 6;
   const barcodeNumber = hasRealBarcode ? card.cardNumber! : '';
 
-  // Debug pour comprendre le problème
-  console.log('🔍 DEBUG BarcodeModal:');
-  console.log('   - Carte:', card.name);
-  console.log('   - cardNumber:', card.cardNumber);
-  console.log('   - cardNumber longueur:', card.cardNumber ? card.cardNumber.length : 0);
-  console.log('   - hasRealBarcode:', hasRealBarcode);
-  console.log('   - barcodeNumber:', barcodeNumber);
+  // Debug pour comprendre le problème (décommenté en cas de problème)
+  // console.log('🔍 DEBUG BarcodeModal:', card.name, hasRealBarcode, card.cardNumber?.length);
 
   // Générer le code-barre quand le composant se monte ou quand le numéro change
   useEffect(() => {
-    console.log('🎯 useEffect BarcodeModal:');
-    console.log('   - hasRealBarcode:', hasRealBarcode);
-    console.log('   - barcodeNumber:', barcodeNumber);
-    console.log('   - Canvas existe:', !!barcodeCanvasRef.current);
-
     if (hasRealBarcode && barcodeCanvasRef.current) {
-      const success = generateRealBarcode(barcodeNumber);
-      console.log('📊 Génération code-barre:', success ? 'SUCCÈS' : 'ÉCHEC');
-    } else {
-      console.log('❌ Code-barre PAS généré car:');
-      if (!hasRealBarcode) console.log('   - hasRealBarcode = false');
-      if (!barcodeCanvasRef.current) console.log('   - Canvas manquant');
+      generateRealBarcode(barcodeNumber);
     }
   }, [hasRealBarcode, barcodeNumber]);
 
@@ -304,7 +289,7 @@ const BarcodeModal: React.FC<BarcodeModalProps> = ({ card, onClose, onCardUpdate
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-3xl shadow-2xl max-w-sm w-full mx-4 overflow-hidden transform transition-all"
+        className="bg-white rounded-3xl shadow-2xl max-w-xs w-full mx-2 overflow-hidden transform transition-all max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header avec bouton fermer */}
@@ -321,10 +306,10 @@ const BarcodeModal: React.FC<BarcodeModalProps> = ({ card, onClose, onCardUpdate
         </div>
 
         {/* Carte de fidélité plein écran */}
-        <div className="p-6">
+        <div className="p-3">
           <div className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
             {/* Header coloré de la carte */}
-            <div className={`bg-gradient-to-r ${getCardColor(card.type)} p-6 text-white`}>
+            <div className={`bg-gradient-to-r ${getCardColor(card.type)} p-4 text-white`}>
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center space-x-3">
                   <div className="text-3xl">
@@ -365,9 +350,9 @@ const BarcodeModal: React.FC<BarcodeModalProps> = ({ card, onClose, onCardUpdate
             </div>
 
             {/* Corps de la carte avec code-barre */}
-            <div className="p-6 bg-gradient-to-br from-gray-50 to-white">
+            <div className="p-4 bg-gradient-to-br from-gray-50 to-white">
               {/* Code-barre principal */}
-              <div className="mb-6">
+              <div className="mb-4">
                 <div className="bg-white p-4 rounded-lg border border-gray-200">
                   {hasRealBarcode ? (
                     <div className="text-center">
@@ -412,54 +397,28 @@ const BarcodeModal: React.FC<BarcodeModalProps> = ({ card, onClose, onCardUpdate
                 </div>
               </div>
 
-              {/* Informations supplémentaires */}
-              <div className="space-y-3">
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-gray-600">Status</span>
-                  <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full font-medium">
-                    ✓ Actif
-                  </span>
-                </div>
-
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-gray-600">Membre depuis</span>
-                  <span className="text-gray-900 font-medium">
-                    {new Intl.DateTimeFormat('fr-FR', {
-                      day: 'numeric',
-                      month: 'long',
-                      year: 'numeric'
-                    }).format(card.createdAt)}
-                  </span>
-                </div>
-
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-gray-600">Type de carte</span>
-                  <span className="text-gray-900 font-medium capitalize">
-                    {card.type}
-                  </span>
-                </div>
-
-                {/* Numéro de carte personnalisé */}
+              {/* Informations essentielles uniquement */}
+              <div className="space-y-2">
+                {/* Numéro de carte détecté */}
                 {card.cardNumber && (
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-gray-600">
-                      {hasRealBarcode ? 'Code-barre détecté' : 'Numéro de carte'}
-                    </span>
-                    <span className="text-gray-900 font-medium font-mono">
-                      {card.cardNumber}
-                    </span>
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <div className="text-center">
+                      <span className="text-xs text-gray-600 uppercase font-medium">
+                        {hasRealBarcode ? 'Numéro détecté automatiquement' : 'Numéro de carte'}
+                      </span>
+                      <p className="text-sm font-mono font-bold text-gray-900 mt-1">
+                        {card.cardNumber}
+                      </p>
+                    </div>
                   </div>
                 )}
 
-                {/* Note personnelle */}
+                {/* Note personnelle si elle existe */}
                 {card.note && (
-                  <div className="text-sm">
-                    <span className="text-gray-600 block mb-1">📝 Note personnelle :</span>
-                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-                      <p className="text-gray-800 text-xs leading-relaxed">
-                        {card.note}
-                      </p>
-                    </div>
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                    <p className="text-xs text-gray-800 leading-relaxed">
+                      📝 {card.note}
+                    </p>
                   </div>
                 )}
               </div>
@@ -467,16 +426,16 @@ const BarcodeModal: React.FC<BarcodeModalProps> = ({ card, onClose, onCardUpdate
           </div>
 
           {/* Actions */}
-          <div className="mt-6 flex space-x-3">
+          <div className="mt-4 flex space-x-2">
             <button
               onClick={onClose}
-              className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-3 px-4 rounded-xl transition-colors"
+              className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 px-3 rounded-lg transition-colors text-sm"
             >
               Fermer
             </button>
             <button
               onClick={() => setShowManageMenu(true)}
-              className={`flex-1 bg-gradient-to-r ${getCardColor(card.type)} text-white font-medium py-3 px-4 rounded-xl transition-colors hover:shadow-lg`}
+              className={`flex-1 bg-gradient-to-r ${getCardColor(card.type)} text-white font-medium py-2 px-3 rounded-lg transition-colors hover:shadow-lg text-sm`}
             >
               Gérer
             </button>

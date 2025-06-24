@@ -245,7 +245,56 @@ export class ImageAnalysisService {
     }
 
     console.log('   🎯 RÉSULTAT FINAL:', numbers);
-    return numbers;
+
+    // Choisir le meilleur numéro automatiquement
+    const bestNumber = this.selectBestNumber(numbers);
+    console.log('   ⭐ MEILLEUR NUMÉRO SÉLECTIONNÉ:', bestNumber);
+
+    return bestNumber ? [bestNumber] : numbers;
+  }
+
+  // Sélectionner le meilleur numéro parmi ceux détectés
+  private static selectBestNumber(numbers: string[]): string | null {
+    if (numbers.length === 0) return null;
+    if (numbers.length === 1) return numbers[0];
+
+    console.log('🏆 SÉLECTION DU MEILLEUR NUMÉRO:');
+
+    // Scores pour chaque numéro
+    const scored = numbers.map(num => {
+      let score = 0;
+      const len = num.length;
+
+      // Bonus pour longueur optimale
+      if (len >= 13 && len <= 19) score += 10; // Codes-barres standards
+      else if (len >= 8 && len <= 12) score += 5;
+      else if (len > 19) score -= 5; // Trop long
+
+      // Malus pour répétitions excessives (000000...)
+      const uniqueDigits = new Set(num).size;
+      if (uniqueDigits <= 2) score -= 10;
+      else if (uniqueDigits <= 4) score -= 5;
+      else score += 2;
+
+      // Bonus pour numéros qui ne commencent pas par 0
+      if (num[0] !== '0') score += 3;
+
+      // Malus pour numéros qui se terminent par beaucoup de 0
+      const trailingZeros = num.match(/0*$/)?.[0]?.length || 0;
+      if (trailingZeros > 3) score -= trailingZeros;
+
+      console.log(`   ${num} → Score: ${score} (len:${len}, unique:${uniqueDigits}, trailing0s:${trailingZeros})`);
+
+      return { number: num, score };
+    });
+
+    // Trier par score décroissant
+    scored.sort((a, b) => b.score - a.score);
+
+    const winner = scored[0];
+    console.log(`   🥇 GAGNANT: ${winner.number} (score: ${winner.score})`);
+
+    return winner.number;
   }
 
   // Formater les résultats pour l'affichage
