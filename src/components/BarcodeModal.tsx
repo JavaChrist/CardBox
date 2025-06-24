@@ -141,10 +141,22 @@ const BarcodeModal: React.FC<BarcodeModalProps> = ({ card, onClose, onCardUpdate
   const hasRealBarcode = card.cardNumber && card.cardNumber.trim().length >= 6;
   const barcodeNumber = hasRealBarcode ? card.cardNumber! : '';
 
+  // Debug pour comprendre le problème
+  console.log('🔍 DEBUG BarcodeModal:', {
+    cardName: card.name,
+    cardNumber: card.cardNumber,
+    cardNumberLength: card.cardNumber ? card.cardNumber.length : 0,
+    hasRealBarcode,
+    barcodeNumber
+  });
+
   // Générer le code-barre quand le composant se monte ou quand le numéro change
   useEffect(() => {
+    console.log('🎯 useEffect BarcodeModal:', { hasRealBarcode, barcodeNumber, canvasExists: !!barcodeCanvasRef.current });
+
     if (hasRealBarcode && barcodeCanvasRef.current) {
-      generateRealBarcode(barcodeNumber);
+      const success = generateRealBarcode(barcodeNumber);
+      console.log('📊 Génération code-barre:', success ? 'SUCCÈS' : 'ÉCHEC');
     }
   }, [hasRealBarcode, barcodeNumber]);
 
