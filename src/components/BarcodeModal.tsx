@@ -106,11 +106,14 @@ const BarcodeModal: React.FC<BarcodeModalProps> = ({ card, onClose, onCardUpdate
       return 'CODE128';
     }
 
-    // Formats numériques en ordre de priorité
-    if (len === 13) return 'EAN13';
-    if (len === 8) return 'EAN8';
-    if (len === 12) return 'UPC';
-    if (len >= 6 && len <= 20) return 'CODE128'; // Plus flexible
+    // PRIORITÉ CODE128 pour éviter les erreurs EAN checksum
+    if (len >= 6 && len <= 20) return 'CODE128'; // Plus robuste et flexible
+
+    // Formats EAN seulement si très spécifiques (et valides)
+    // Désactivé temporairement car problèmes checksum
+    // if (len === 13) return 'EAN13';
+    // if (len === 8) return 'EAN8';
+    // if (len === 12) return 'UPC';
 
     // Dernier recours : CODE128 pour tout ce qui a au moins 4 caractères
     if (originalNumber.length >= 4) return 'CODE128';
@@ -150,23 +153,15 @@ const BarcodeModal: React.FC<BarcodeModalProps> = ({ card, onClose, onCardUpdate
       let barcodeData = originalNumber;
       let finalFormat = initialFormat;
 
-      // Pour EAN/UPC, utiliser uniquement les chiffres
-      if (initialFormat === 'EAN13' || initialFormat === 'EAN8' || initialFormat === 'UPC') {
-        const numericOnly = originalNumber.replace(/\D/g, '');
-        console.log('🔢 NUMERIQUE SEULEMENT:', numericOnly, 'longueur:', numericOnly.length);
-
-        // Vérifier que le numéro nettoyé a encore la bonne longueur
-        if ((initialFormat === 'EAN13' && numericOnly.length === 13) ||
-          (initialFormat === 'EAN8' && numericOnly.length === 8) ||
-          (initialFormat === 'UPC' && numericOnly.length === 12)) {
-          barcodeData = numericOnly;
-          console.log('✅ UTILISATION FORMAT', initialFormat, 'avec:', barcodeData);
-        } else {
-          // Fallback vers CODE128 si les chiffres seuls ne correspondent pas
-          barcodeData = originalNumber;
-          finalFormat = 'CODE128';
-          console.log('🔄 FALLBACK vers CODE128 avec:', barcodeData);
-        }
+      // Pour CODE128, utiliser le numéro tel quel (plus robuste)
+      if (initialFormat === 'CODE128') {
+        barcodeData = originalNumber;
+        console.log('✅ UTILISATION CODE128 avec:', barcodeData);
+      }
+      // Pour les autres formats (si jamais ils sont encore utilisés)
+      else {
+        barcodeData = originalNumber.replace(/\D/g, '');
+        console.log('✅ UTILISATION', initialFormat, 'avec:', barcodeData);
       }
 
       console.log('📊 GENERATION FINALE - Format:', finalFormat, 'Data:', barcodeData);

@@ -339,6 +339,13 @@ export class ImageAnalysisService {
 
     console.log('🎯 DEBUT SELECTION parmi:', numbers);
 
+    // PRIORITÉ ABSOLUE pour Castorama 913... si présent
+    const castoramaNumber = numbers.find(num => /^913\d{16}$/.test(num));
+    if (castoramaNumber) {
+      console.log('🏆 CASTORAMA TROUVÉ - SÉLECTION IMMÉDIATE:', castoramaNumber);
+      return castoramaNumber;
+    }
+
     // Scores pour chaque numéro
     const scored = numbers.map(num => {
       let score = 0;
