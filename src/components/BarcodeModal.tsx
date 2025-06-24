@@ -100,37 +100,53 @@ const BarcodeModal: React.FC<BarcodeModalProps> = ({ card, onClose, onCardUpdate
   // Fonction pour déterminer le format de code-barre optimal
   const getBarcodeFormat = (number: string) => {
     const cleanNumber = number.replace(/\D/g, ''); // Supprimer tout sauf les chiffres
+    const len = cleanNumber.length;
 
-    if (cleanNumber.length === 13) return 'EAN13';
-    if (cleanNumber.length === 8) return 'EAN8';
-    if (cleanNumber.length === 12) return 'UPC';
-    if (cleanNumber.length >= 6) return 'CODE128'; // Plus flexible
-    return null;
+    // Formats en ordre de priorité
+    if (len === 13) return 'EAN13';
+    if (len === 8) return 'EAN8';
+    if (len === 12) return 'UPC';
+    if (len >= 6 && len <= 20) return 'CODE128'; // Plus flexible
+
+    // Si rien ne marche, essayer CODE128 quand même
+    return 'CODE128';
   };
 
   // Fonction pour générer un vrai code-barre scannable
   const generateRealBarcode = (number: string) => {
-    if (!barcodeCanvasRef.current) return false;
+    if (!barcodeCanvasRef.current) {
+      return false;
+    }
 
     const cleanNumber = number.replace(/\D/g, '');
     const format = getBarcodeFormat(cleanNumber);
 
-    if (!format) return false;
+    if (!format) {
+      return false;
+    }
 
     try {
-      JsBarcode(barcodeCanvasRef.current, cleanNumber, {
+      // Nettoyer le canvas d'abord
+      const canvas = barcodeCanvasRef.current;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
+
+      JsBarcode(canvas, cleanNumber, {
         format: format,
-        width: 1.5, // Plus fin pour mobile
-        height: 50, // Plus court pour mobile
+        width: 1.8, // Un peu plus large
+        height: 60, // Un peu plus haut
         displayValue: true,
-        fontSize: 12, // Police plus petite
+        fontSize: 14, // Police légèrement plus grande
         fontOptions: "bold",
-        textMargin: 6,
+        textMargin: 8,
         background: "#ffffff",
         lineColor: "#000000"
       });
+
       return true;
-    } catch {
+    } catch (error) {
       return false;
     }
   };
@@ -138,9 +154,6 @@ const BarcodeModal: React.FC<BarcodeModalProps> = ({ card, onClose, onCardUpdate
   // Utiliser le vrai numéro de carte
   const hasRealBarcode = card.cardNumber && card.cardNumber.trim().length >= 6;
   const barcodeNumber = hasRealBarcode ? card.cardNumber! : '';
-
-  // Debug pour comprendre le problème (décommenté en cas de problème)
-  // console.log('🔍 DEBUG BarcodeModal:', card.name, hasRealBarcode, card.cardNumber?.length);
 
   // Générer le code-barre quand le composant se monte ou quand le numéro change
   useEffect(() => {

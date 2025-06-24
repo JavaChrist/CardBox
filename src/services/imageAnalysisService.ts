@@ -33,18 +33,12 @@ export class ImageAnalysisService {
       // Traiter les résultats codes-barres (PRIORITÉ)
       if (barcodeResult.status === 'fulfilled') {
         result.barcodes = barcodeResult.value;
-        console.log('📊 Codes-barres QuaggaJS trouvés:', result.barcodes);
-      } else {
-        console.log('⚠️ QuaggaJS a échoué:', barcodeResult.reason);
       }
 
       // Traiter les résultats OCR (SECONDAIRE)
       if (ocrResult.status === 'fulfilled') {
         result.text = ocrResult.value.text;
         result.numbers = ocrResult.value.numbers;
-        console.log('📝 Numéros OCR trouvés:', result.numbers);
-      } else {
-        console.log('⚠️ OCR a échoué:', ocrResult.reason);
       }
 
       // Nettoyer l'URL
@@ -55,11 +49,8 @@ export class ImageAnalysisService {
 
       // Si on a des codes-barres QuaggaJS, on privilégie totalement
       if (result.barcodes.length > 0) {
-        console.log('🎯 CODES-BARRES DÉTECTÉS ! Ignoring OCR numbers');
         // Garder seulement les codes-barres, ignorer les numéros OCR potentiellement faux
         result.numbers = [];
-      } else {
-        console.log('⚠️ AUCUN CODE-BARRE DÉTECTÉ - Utilisation OCR');
       }
 
       return result;
@@ -77,35 +68,27 @@ export class ImageAnalysisService {
 
   // OCR avec Tesseract.js
   private static async performOCR(imageUrl: string): Promise<{ text: string; numbers: string[] }> {
-    try {
-      // Configuration OCR optimisée pour les codes-barres et numéros
-      const { data: { text } } = await Tesseract.recognize(
-        imageUrl,
-        'eng', // Anglais pour les chiffres (plus performant que français)
-        {
-          // Configuration optimisée pour les numéros
-        }
-      );
+    // Configuration OCR optimisée pour les codes-barres et numéros
+    const { data: { text } } = await Tesseract.recognize(
+      imageUrl,
+      'eng', // Anglais pour les chiffres (plus performant que français)
+      {
+        // Configuration optimisée pour les numéros
+      }
+    );
 
-      // Extraire les numéros de carte potentiels
-      const numbers = this.extractCardNumbers(text);
+    // Extraire les numéros de carte potentiels
+    const numbers = this.extractCardNumbers(text);
 
-      return { text, numbers };
-
-    } catch (error) {
-      throw error;
-    }
+    return { text, numbers };
   }
 
   // Scanner les codes-barres avec QuaggaJS
   private static async scanBarcodes(imageUrl: string): Promise<string[]> {
     return new Promise((resolve, reject) => {
       try {
-        console.log('📊 Début scan QuaggaJS...');
         const img = new Image();
         img.onload = () => {
-          console.log('🖼️ Image chargée:', img.width, 'x', img.height);
-
           // Créer un canvas amélioré pour QuaggaJS
           const canvas = document.createElement('canvas');
           const ctx = canvas.getContext('2d')!;
@@ -119,8 +102,6 @@ export class ImageAnalysisService {
           ctx.scale(scale, scale);
           ctx.imageSmoothingEnabled = false; // Pas de lissage pour garder les détails
           ctx.drawImage(img, 0, 0);
-
-          console.log('🎨 Canvas créé:', canvas.width, 'x', canvas.height);
 
           // Essayer plusieurs configurations QuaggaJS
           const configs = [
@@ -173,18 +154,14 @@ export class ImageAnalysisService {
           let attempts = 0;
           const tryNext = () => {
             if (attempts >= configs.length) {
-              console.log('❌ Toutes les configurations QuaggaJS ont échoué');
               resolve([]);
               return;
             }
 
-            const { name, config } = configs[attempts];
-            console.log(`🔄 Tentative ${attempts + 1} (${name})...`);
+            const { config } = configs[attempts];
 
             Quagga.decodeSingle(config, (result) => {
-              console.log(`🔍 QuaggaJS ${name} résultat:`, result);
               if (result && result.codeResult) {
-                console.log(`✅ Code-barre détecté (${name}):`, result.codeResult.code);
                 resolve([result.codeResult.code]);
               } else {
                 attempts++;
@@ -197,7 +174,6 @@ export class ImageAnalysisService {
         };
 
         img.onerror = () => {
-          console.log('❌ Erreur chargement image');
           reject(new Error('Impossible de charger l\'image'));
         };
 
@@ -205,12 +181,10 @@ export class ImageAnalysisService {
 
         // Timeout plus long pour les multiples tentatives
         setTimeout(() => {
-          console.log('⏰ Timeout QuaggaJS');
           resolve([]);
         }, 15000);
 
       } catch (error) {
-        console.log('❌ Erreur QuaggaJS:', error);
         reject(error);
       }
     });
@@ -297,31 +271,47 @@ export class ImageAnalysisService {
       const len = num.length;
 
       // FORTE priorité pour longueurs de codes-barres standards
-      if (len === 13) score += 20; // EAN-13 (très commun)
-      else if (len === 12) score += 18; // UPC
-      else if (len === 8) score += 15; // EAN-8
-      else if (len >= 10 && len <= 14) score += 10; // Autres standards
-      else if (len > 19) score -= 20; // Beaucoup trop long
-      else if (len < 6) score -= 15; // Trop court
+      if (len === 13) score += 25; // EAN-13 (très commun cartes fidélité)
+      else if (len === 12) score += 22; // UPC
+      else if (len === 8) score += 20; // EAN-8
+      else if (len === 10 || len === 11) score += 18; // Autres standards courts
+      else if (len === 14 || len === 15) score += 15; // Standards moyens
+      else if (len >= 16 && len <= 19) score += 12; // Standards longs
+      else if (len > 20) score -= 25; // Beaucoup trop long
+      else if (len < 6) score -= 20; // Trop court
 
-      // Malus FORT pour répétitions excessives (000000...)
+      // Malus TRÈS FORT pour répétitions excessives (000000...)
       const uniqueDigits = new Set(num).size;
-      if (uniqueDigits <= 2) score -= 25; // Très suspect
-      else if (uniqueDigits <= 3) score -= 15; // Suspect  
-      else if (uniqueDigits <= 4) score -= 8; // Un peu suspect
-      else score += 5; // Bonne diversité
+      if (uniqueDigits <= 2) score -= 30; // Très suspect
+      else if (uniqueDigits <= 3) score -= 20; // Suspect  
+      else if (uniqueDigits <= 4) score -= 12; // Un peu suspect
+      else if (uniqueDigits >= 8) score += 8; // Très bonne diversité
+      else if (uniqueDigits >= 6) score += 5; // Bonne diversité
 
-      // Bonus pour numéros qui ne commencent pas par 0
-      if (num[0] !== '0') score += 5;
+      // FORT bonus pour numéros qui ne commencent pas par 0 (sauf EAN valides)
+      if (num[0] !== '0') score += 8;
+      else if (len === 13 || len === 8) score += 3; // EAN peut commencer par 0
 
       // FORTE pénalité pour numéros qui se terminent par beaucoup de 0
       const trailingZeros = num.match(/0*$/)?.[0]?.length || 0;
-      if (trailingZeros > 5) score -= 20;
-      else if (trailingZeros > 3) score -= 10;
+      if (trailingZeros > 6) score -= 25;
+      else if (trailingZeros > 4) score -= 15;
+      else if (trailingZeros > 2) score -= 8;
 
-      // Bonus pour patterns typiques de codes-barres
-      if (/^[1-9]\d{11,12}$/.test(num)) score += 10; // Pattern EAN/UPC
-      if (/^[0-9]{13}$/.test(num) && num[0] !== '0') score += 8; // EAN-13 valide
+      // Bonus pour patterns typiques de codes-barres cartes fidélité
+      if (/^[1-9]\d{12}$/.test(num)) score += 15; // EAN-13 commençant par 1-9
+      if (/^[1-9]\d{11}$/.test(num)) score += 13; // UPC commençant par 1-9
+      if (/^[3-9]\d{7}$/.test(num)) score += 12; // EAN-8 commençant par 3-9
+
+      // Malus pour patterns suspects
+      if (/^(\d)\1{7,}$/.test(num)) score -= 35; // Même chiffre répété
+      if (/^12345/.test(num) || /56789/.test(num)) score -= 20; // Séquences
+      if (/00000/.test(num)) score -= 15; // Trop de zéros consécutifs
+
+      // Bonus pour marques françaises courantes (patterns connus)
+      if (/^3[0-9]{12}$/.test(num)) score += 12; // EAN-13 français (3...)
+      if (/^20[0-9]{11}$/.test(num)) score += 10; // Format 20... (magasins)
+      if (/^[4-6][0-9]{12}$/.test(num)) score += 8; // Autres codes européens
 
       return { number: num, score };
     });
