@@ -33,7 +33,7 @@ interface CardFormProps {
   onCancel: () => void;
 }
 
-type FormStep = 'brands' | 'method' | 'manual' | 'scan';
+type FormStep = 'brands' | 'method' | 'manual';
 
 const CardForm = ({ onCardAdded, onCancel }: CardFormProps) => {
   const [step, setStep] = useState<FormStep>('brands');
@@ -57,7 +57,71 @@ const CardForm = ({ onCardAdded, onCancel }: CardFormProps) => {
     if (method === 'manual') {
       setStep('manual');
     } else {
-      setStep('scan');
+      // Ouvrir directement la caméra au lieu d'aller à l'étape scan
+      triggerCameraCapture();
+      setStep('manual');
+    }
+  };
+
+  const triggerCameraCapture = () => {
+    try {
+      // Créer un input temporaire pour ouvrir la caméra
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.capture = 'environment'; // Caméra arrière sur mobile
+      input.style.display = 'none';
+      input.style.position = 'absolute';
+      input.style.top = '-9999px';
+
+      const handleChange = async (e: Event) => {
+        const target = e.target as HTMLInputElement;
+        if (target.files && target.files[0]) {
+          const file = target.files[0];
+          setImage(file);
+
+          const reader = new FileReader();
+          reader.onload = () => {
+            setPreviewUrl(reader.result as string);
+          };
+          reader.readAsDataURL(file);
+
+          // Analyser automatiquement l'image
+          await analyzeImage(file);
+        }
+        // Nettoyer l'input temporaire
+        try {
+          if (document.body.contains(input)) {
+            document.body.removeChild(input);
+          }
+        } catch {
+          console.log('Input déjà supprimé');
+        }
+      };
+
+      const handleCancel = () => {
+        // Nettoyer si l'utilisateur annule
+        try {
+          if (document.body.contains(input)) {
+            document.body.removeChild(input);
+          }
+        } catch {
+          console.log('Input déjà supprimé');
+        }
+      };
+
+      input.addEventListener('change', handleChange);
+      input.addEventListener('cancel', handleCancel);
+
+      document.body.appendChild(input);
+
+      // Déclencher l'ouverture de la caméra
+      setTimeout(() => {
+        input.click();
+      }, 100);
+
+    } catch (error) {
+      console.error('Erreur lors de l\'ouverture de la caméra:', error);
     }
   };
 
@@ -270,8 +334,8 @@ const CardForm = ({ onCardAdded, onCancel }: CardFormProps) => {
                     📱
                   </div>
                   <div className="flex-1 text-left">
-                    <h3 className="font-semibold text-gray-900">Scanner le code-barres</h3>
-                    <p className="text-sm text-gray-600">Utilisez l'appareil photo pour scanner</p>
+                    <h3 className="font-semibold text-gray-900">Prendre une photo</h3>
+                    <p className="text-sm text-gray-600">Analyse automatique des codes-barres et numéros</p>
                   </div>
                   <svg className="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
@@ -298,60 +362,7 @@ const CardForm = ({ onCardAdded, onCancel }: CardFormProps) => {
           </>
         )}
 
-        {/* ÉTAPE 3: Scanner (simulation) */}
-        {step === 'scan' && selectedBrand && (
-          <>
-            <div className="flex items-center justify-between p-6 border-b border-gray-100">
-              <div className="flex items-center space-x-3">
-                <button onClick={() => setStep('method')} className="text-gray-400 hover:text-gray-600">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                  </svg>
-                </button>
-                <h2 className="text-xl font-bold text-gray-900">Scanner</h2>
-              </div>
-              <button onClick={onCancel} className="text-gray-400 hover:text-gray-600 transition-colors">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            <div className="p-6 text-center">
-              <div className="w-64 h-48 mx-auto bg-gray-900 rounded-xl flex items-center justify-center mb-6 relative overflow-hidden">
-                <div className="text-white text-4xl">📱</div>
-                {/* Animation de scan */}
-                <div className="absolute inset-0 border-2 border-red-500 rounded-xl">
-                  <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-red-500 animate-pulse"></div>
-                </div>
-              </div>
-
-              <p className="text-gray-600 mb-6">Placez votre carte devant l'appareil photo</p>
-
-              <div className="space-y-3">
-                <button
-                  onClick={() => {
-                    // Simulation d'un scan réussi
-                    setCardNumber('1234567890123');
-                    setStep('manual');
-                  }}
-                  className="w-full bg-green-600 hover:bg-green-700 text-white py-3 px-6 rounded-xl font-medium transition-colors"
-                >
-                  ✓ Simuler scan réussi
-                </button>
-
-                <button
-                  onClick={() => setStep('manual')}
-                  className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 py-3 px-6 rounded-xl font-medium transition-colors"
-                >
-                  Saisir manuellement
-                </button>
-              </div>
-            </div>
-          </>
-        )}
-
-        {/* ÉTAPE 4: Saisie manuelle */}
+        {/* ÉTAPE 3: Saisie manuelle */}
         {step === 'manual' && selectedBrand && (
           <>
             <div className="flex items-center justify-between p-6 border-b border-gray-100">
