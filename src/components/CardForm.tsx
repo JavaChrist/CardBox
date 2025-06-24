@@ -3,6 +3,7 @@ import { collection, addDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage, auth } from '../services/firebase';
 import { popularBrands } from '../data/popularBrands';
+import { ImageAnalysisService, type AnalysisResult } from '../services/imageAnalysisService';
 
 interface PopularBrand {
   id: string;
@@ -43,6 +44,9 @@ const CardForm = ({ onCardAdded, onCancel }: CardFormProps) => {
   const [image, setImage] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
+  const [showAnalysisResults, setShowAnalysisResults] = useState(false);
 
   const handleBrandSelect = (brand: PopularBrand) => {
     setSelectedBrand(brand);
@@ -57,7 +61,7 @@ const CardForm = ({ onCardAdded, onCancel }: CardFormProps) => {
     }
   };
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       setImage(file);
@@ -67,6 +71,41 @@ const CardForm = ({ onCardAdded, onCancel }: CardFormProps) => {
         setPreviewUrl(reader.result as string);
       };
       reader.readAsDataURL(file);
+
+      // Analyser automatiquement l'image
+      await analyzeImage(file);
+    }
+  };
+
+  const analyzeImage = async (file: File) => {
+    try {
+      setAnalyzing(true);
+      setAnalysisResult(null);
+      setShowAnalysisResults(false);
+
+      console.log('🔍 Analyse de l\'image en cours...');
+      const result = await ImageAnalysisService.analyzeImage(file);
+
+      setAnalysisResult(result);
+
+      if (result.success) {
+        setShowAnalysisResults(true);
+
+        // Pré-remplir automatiquement le champ numéro de carte
+        if (result.barcodes.length > 0) {
+          setCardNumber(result.barcodes[0]);
+        } else if (result.numbers.length > 0) {
+          setCardNumber(result.numbers[0]);
+        }
+
+        console.log('✅ Analyse terminée avec succès');
+      } else {
+        console.log('ℹ️ Aucune information détectée dans l\'image');
+      }
+    } catch (error) {
+      console.error('❌ Erreur lors de l\'analyse:', error);
+    } finally {
+      setAnalyzing(false);
     }
   };
 
@@ -132,6 +171,9 @@ const CardForm = ({ onCardAdded, onCancel }: CardFormProps) => {
       setNote('');
       setImage(null);
       setPreviewUrl(null);
+      setAnalyzing(false);
+      setAnalysisResult(null);
+      setShowAnalysisResults(false);
 
       onCardAdded(newCard);
     } catch (error) {
@@ -466,6 +508,101 @@ const CardForm = ({ onCardAdded, onCancel }: CardFormProps) => {
                   </svg>
                   <span>📸 Prendre une photo</span>
                 </button>
+
+                {/* Indicateur d'analyse en cours */}
+                {analyzing && (
+                  <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-xl">
+                    <div className="flex items-center justify-center space-x-3">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                      <div className="text-blue-700">
+                        <p className="font-medium">🔍 Analyse en cours...</p>
+                        <p className="text-sm">Détection des codes-barres et texte</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Résultats de l'analyse */}
+                {showAnalysisResults && analysisResult && (
+                  <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-xl">
+                    <div className="flex items-start space-x-3">
+                      <div className="flex-shrink-0">
+                        <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center">
+                          <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                        </div>
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="font-medium text-green-800 mb-2">✅ Informations détectées</h4>
+
+                        {/* Codes-barres détectés */}
+                        {analysisResult.barcodes.length > 0 && (
+                          <div className="mb-3">
+                            <p className="text-sm font-medium text-green-700 mb-1">📊 Codes-barres :</p>
+                            {analysisResult.barcodes.map((barcode, index) => (
+                              <div key={index} className="flex items-center justify-between bg-white p-2 rounded border">
+                                <span className="font-mono text-sm">{barcode}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => setCardNumber(barcode)}
+                                  className="text-xs bg-green-600 text-white px-2 py-1 rounded hover:bg-green-700"
+                                >
+                                  Utiliser
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Numéros détectés */}
+                        {analysisResult.numbers.length > 0 && (
+                          <div className="mb-3">
+                            <p className="text-sm font-medium text-green-700 mb-1">🔢 Numéros détectés :</p>
+                            {analysisResult.numbers.slice(0, 3).map((number, index) => (
+                              <div key={index} className="flex items-center justify-between bg-white p-2 rounded border mb-1">
+                                <span className="font-mono text-sm">{number}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => setCardNumber(number)}
+                                  className="text-xs bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700"
+                                >
+                                  Utiliser
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Bouton pour cacher les résultats */}
+                        <button
+                          type="button"
+                          onClick={() => setShowAnalysisResults(false)}
+                          className="text-xs text-green-600 hover:text-green-800 underline"
+                        >
+                          Masquer les résultats
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Message si aucune information détectée */}
+                {analysisResult && !analysisResult.success && !analyzing && (
+                  <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-xl">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-8 h-8 bg-yellow-500 rounded-full flex items-center justify-center">
+                        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                        </svg>
+                      </div>
+                      <div>
+                        <p className="font-medium text-yellow-800">⚠️ Aucune information détectée</p>
+                        <p className="text-sm text-yellow-700">Vous pouvez saisir manuellement les informations</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Boutons */}
