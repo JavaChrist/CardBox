@@ -358,11 +358,8 @@ const BarcodeModal: React.FC<BarcodeModalProps> = ({ card, onClose, onCardUpdate
                     <div className="text-center">
                       <canvas
                         ref={barcodeCanvasRef}
-                        className="mx-auto mb-3"
+                        className="mx-auto"
                       />
-                      <p className="text-xs text-green-600 font-medium">
-                        🎯 Code-barre généré • 100% scannable en magasin
-                      </p>
                     </div>
                   ) : (
                     /* Affichage quand aucun code-barre n'est détecté */
