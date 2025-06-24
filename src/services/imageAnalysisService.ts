@@ -194,6 +194,9 @@ export class ImageAnalysisService {
   private static extractCardNumbers(text: string): string[] {
     const numbers: string[] = [];
 
+    // Nettoyer d'abord les erreurs OCR courantes
+    const cleanedText = this.fixOCRErrors(text);
+
     // Patterns pour différents types de numéros de carte
     const patterns = [
       /\b\d{13,19}\b/g, // Longs (13-19 chiffres)
@@ -204,7 +207,7 @@ export class ImageAnalysisService {
     ];
 
     patterns.forEach(pattern => {
-      const matches = text.match(pattern);
+      const matches = cleanedText.match(pattern);
       if (matches) {
         matches.forEach(match => {
           const cleanNumber = match.replace(/[\s-]/g, '');
@@ -219,7 +222,7 @@ export class ImageAnalysisService {
     const keywords = ['carte', 'card', 'number', 'numéro', 'n°', 'num', 'client', 'member', 'code'];
     keywords.forEach(keyword => {
       const regex = new RegExp(`${keyword}[^\\d]*([\\d\\s-]{8,20})`, 'gi');
-      const matches = text.match(regex);
+      const matches = cleanedText.match(regex);
       if (matches) {
         matches.forEach(match => {
           const numberPart = match.replace(/[^\d\s-]/g, '').replace(/[\s-]/g, '');
@@ -231,7 +234,7 @@ export class ImageAnalysisService {
     });
 
     // Extraction brute de TOUS les chiffres (dernière chance)
-    const allDigits = text.replace(/\D/g, '');
+    const allDigits = cleanedText.replace(/\D/g, '');
     if (allDigits.length >= 8) {
       // Essayer de découper en segments significatifs
       for (let start = 0; start <= allDigits.length - 8; start++) {
@@ -258,6 +261,26 @@ export class ImageAnalysisService {
     }
 
     return numbers;
+  }
+
+  // Corriger les erreurs OCR courantes (lettres/chiffres confondus)
+  private static fixOCRErrors(text: string): string {
+    return text
+      // Corrections lettres → chiffres (ordre important)
+      .replace(/[O]/g, '0')      // O → 0
+      .replace(/[I|l]/g, '1')    // I, l → 1  
+      .replace(/[Z]/g, '2')      // Z → 2
+      .replace(/[S]/g, '5')      // S → 5
+      .replace(/[G]/g, '6')      // G → 6
+      .replace(/[T]/g, '7')      // T → 7
+      .replace(/[B]/g, '8')      // B → 8
+      .replace(/[g]/g, '9')      // g → 9
+      // Corrections contextuelles pour cartes
+      .replace(/[U]/g, '0')      // U → 0 (erreur courante)
+      .replace(/[W]/g, '0')      // W → 0 (erreur courante) 
+      .replace(/[A]/g, '4')      // A → 4 (erreur courante)
+      // Nettoyer espaces multiples
+      .replace(/\s+/g, ' ');
   }
 
   // Sélectionner le meilleur numéro parmi ceux détectés
