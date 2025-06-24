@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db, auth } from '../services/firebase';
 import JsBarcode from 'jsbarcode';
@@ -121,50 +121,38 @@ const BarcodeModal: React.FC<BarcodeModalProps> = ({ card, onClose, onCardUpdate
     return null;
   };
 
-  // Fonction pour générer un vrai code-barre scannable
-  const generateRealBarcode = (number: string) => {
-    console.log('🎯 GENERATION CODE-BARRE - Input:', number);
-
-    if (!barcodeCanvasRef.current) {
-      console.log('❌ CANVAS NON DISPONIBLE');
-      return false;
-    }
-
-    const originalNumber = number.trim();
-    const initialFormat = getBarcodeFormat(originalNumber);
-
-    console.log('📋 FORMAT INITIAL DETECTE:', initialFormat);
-
-    if (!initialFormat) {
-      console.log('❌ AUCUN FORMAT SUPPORTE POUR:', originalNumber);
-      return false;
-    }
+  const generateRealBarcode = useCallback((number: string) => {
+    const canvas = barcodeCanvasRef.current;
+    if (!canvas || !number) return false;
 
     try {
-      // Nettoyer le canvas d'abord
-      const canvas = barcodeCanvasRef.current;
+      // Nettoyage du canvas
       const ctx = canvas.getContext('2d');
       if (ctx) {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        console.log('🧹 CANVAS NETTOYE');
+      }
+
+      // Détection du format optimal
+      const originalNumber = number.trim();
+      const initialFormat = getBarcodeFormat(originalNumber);
+
+      // Validation basique
+      if (originalNumber.length < 4 || !initialFormat) {
+        return false;
       }
 
       // Choisir le bon numéro et format selon les contraintes
       let barcodeData = originalNumber;
-      let finalFormat = initialFormat;
+      const finalFormat = initialFormat;
 
       // Pour CODE128, utiliser le numéro tel quel (plus robuste)
       if (initialFormat === 'CODE128') {
         barcodeData = originalNumber;
-        console.log('✅ UTILISATION CODE128 avec:', barcodeData);
       }
       // Pour les autres formats (si jamais ils sont encore utilisés)
       else {
         barcodeData = originalNumber.replace(/\D/g, '');
-        console.log('✅ UTILISATION', initialFormat, 'avec:', barcodeData);
       }
-
-      console.log('📊 GENERATION FINALE - Format:', finalFormat, 'Data:', barcodeData);
 
       JsBarcode(canvas, barcodeData, {
         format: finalFormat,
@@ -178,13 +166,11 @@ const BarcodeModal: React.FC<BarcodeModalProps> = ({ card, onClose, onCardUpdate
         lineColor: "#000000"
       });
 
-      console.log('✅ CODE-BARRE GENERE AVEC SUCCES');
       return true;
-    } catch (error) {
-      console.log('💥 ERREUR GENERATION CODE-BARRE:', error);
+    } catch {
       return false;
     }
-  };
+  }, []);
 
   // Utiliser le vrai numéro de carte - condition améliorée
   const hasRealBarcode = card.cardNumber && card.cardNumber.trim().length >= 4;
@@ -195,7 +181,7 @@ const BarcodeModal: React.FC<BarcodeModalProps> = ({ card, onClose, onCardUpdate
     if (hasRealBarcode && barcodeCanvasRef.current) {
       generateRealBarcode(barcodeNumber);
     }
-  }, [hasRealBarcode, barcodeNumber]);
+  }, [hasRealBarcode, barcodeNumber, generateRealBarcode]);
 
   // Fonctions d'édition
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -220,7 +206,7 @@ const BarcodeModal: React.FC<BarcodeModalProps> = ({ card, onClose, onCardUpdate
         return;
       }
 
-      const updates: any = {
+      const updates: Partial<Card> = {
         cardNumber: editCardNumber.trim(),
         note: editNote.trim()
       };
