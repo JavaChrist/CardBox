@@ -142,21 +142,27 @@ const BarcodeModal: React.FC<BarcodeModalProps> = ({ card, onClose, onCardUpdate
   const barcodeNumber = hasRealBarcode ? card.cardNumber! : '';
 
   // Debug pour comprendre le problème
-  console.log('🔍 DEBUG BarcodeModal:', {
-    cardName: card.name,
-    cardNumber: card.cardNumber,
-    cardNumberLength: card.cardNumber ? card.cardNumber.length : 0,
-    hasRealBarcode,
-    barcodeNumber
-  });
+  console.log('🔍 DEBUG BarcodeModal:');
+  console.log('   - Carte:', card.name);
+  console.log('   - cardNumber:', card.cardNumber);
+  console.log('   - cardNumber longueur:', card.cardNumber ? card.cardNumber.length : 0);
+  console.log('   - hasRealBarcode:', hasRealBarcode);
+  console.log('   - barcodeNumber:', barcodeNumber);
 
   // Générer le code-barre quand le composant se monte ou quand le numéro change
   useEffect(() => {
-    console.log('🎯 useEffect BarcodeModal:', { hasRealBarcode, barcodeNumber, canvasExists: !!barcodeCanvasRef.current });
+    console.log('🎯 useEffect BarcodeModal:');
+    console.log('   - hasRealBarcode:', hasRealBarcode);
+    console.log('   - barcodeNumber:', barcodeNumber);
+    console.log('   - Canvas existe:', !!barcodeCanvasRef.current);
 
     if (hasRealBarcode && barcodeCanvasRef.current) {
       const success = generateRealBarcode(barcodeNumber);
       console.log('📊 Génération code-barre:', success ? 'SUCCÈS' : 'ÉCHEC');
+    } else {
+      console.log('❌ Code-barre PAS généré car:');
+      if (!hasRealBarcode) console.log('   - hasRealBarcode = false');
+      if (!barcodeCanvasRef.current) console.log('   - Canvas manquant');
     }
   }, [hasRealBarcode, barcodeNumber]);
 
