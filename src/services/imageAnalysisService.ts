@@ -337,69 +337,91 @@ export class ImageAnalysisService {
     if (numbers.length === 0) return null;
     if (numbers.length === 1) return numbers[0];
 
+    console.log('🎯 DEBUT SELECTION parmi:', numbers);
+
     // Scores pour chaque numéro
     const scored = numbers.map(num => {
       let score = 0;
       const len = num.length;
 
+      console.log(`📊 SCORING ${num} (longueur: ${len})`);
+
       // NOUVELLE PRIORITÉ : Longueurs de cartes de fidélité réelles
-      if (len === 19) score += 30; // Castorama, grandes enseignes (PRIORITÉ MAX)
-      else if (len === 18) score += 28; // Autres longues cartes
-      else if (len === 16 || len === 17) score += 25; // Cartes bancaires/fidélité
-      else if (len === 13) score += 20; // EAN-13 standard
-      else if (len === 12) score += 18; // UPC
-      else if (len === 8) score += 15; // EAN-8
-      else if (len === 10 || len === 11) score += 12; // Autres standards courts
-      else if (len === 14 || len === 15) score += 10; // Standards moyens
-      else if (len > 20) score -= 30; // Beaucoup trop long
-      else if (len < 6) score -= 25; // Trop court
+      if (len === 19) {
+        score += 30;
+        console.log(`  +30 (19 chiffres) = ${score}`);
+      } else if (len === 18) {
+        score += 28;
+        console.log(`  +28 (18 chiffres) = ${score}`);
+      } else if (len === 16 || len === 17) {
+        score += 25;
+        console.log(`  +25 (16-17 chiffres) = ${score}`);
+      } else if (len === 13) {
+        score += 20;
+        console.log(`  +20 (13 chiffres) = ${score}`);
+      } else if (len === 12) {
+        score += 18;
+        console.log(`  +18 (12 chiffres) = ${score}`);
+      } else if (len === 8) {
+        score += 15;
+        console.log(`  +15 (8 chiffres) = ${score}`);
+      } else if (len === 10 || len === 11) {
+        score += 12;
+        console.log(`  +12 (10-11 chiffres) = ${score}`);
+      } else if (len === 14 || len === 15) {
+        score += 10;
+        console.log(`  +10 (14-15 chiffres) = ${score}`);
+      } else if (len > 20) {
+        score -= 30;
+        console.log(`  -30 (trop long) = ${score}`);
+      } else if (len < 6) {
+        score -= 25;
+        console.log(`  -25 (trop court) = ${score}`);
+      }
 
       // BONUS ÉNORME pour patterns spécifiques de grandes enseignes
-      if (/^913\d{16}$/.test(num)) score += 50; // Castorama 913...
-      if (/^20\d{16,17}$/.test(num)) score += 40; // Super U, Leclerc 20...
-      if (/^345\d{15,16}$/.test(num)) score += 35; // Carrefour 345...
-      if (/^[1-9]\d{18}$/.test(num)) score += 25; // Tout numéro 19 chiffres commençant par 1-9
+      if (/^913\d{16}$/.test(num)) {
+        score += 50;
+        console.log(`  +50 (CASTORAMA 913...) = ${score}`);
+      }
+      if (/^20\d{16,17}$/.test(num)) {
+        score += 40;
+        console.log(`  +40 (Super U/Leclerc 20...) = ${score}`);
+      }
+      if (/^345\d{15,16}$/.test(num)) {
+        score += 35;
+        console.log(`  +35 (Carrefour 345...) = ${score}`);
+      }
+      if (/^[1-9]\d{18}$/.test(num)) {
+        score += 25;
+        console.log(`  +25 (19 chiffres valide) = ${score}`);
+      }
 
-      // Malus TRÈS FORT pour répétitions excessives (000000...)
-      const uniqueDigits = new Set(num).size;
-      if (uniqueDigits <= 2) score -= 35; // Très suspect
-      else if (uniqueDigits <= 3) score -= 25; // Suspect  
-      else if (uniqueDigits <= 4) score -= 15; // Un peu suspect
-      else if (uniqueDigits >= 8) score += 10; // Très bonne diversité
-      else if (uniqueDigits >= 6) score += 8; // Bonne diversité
+      // FORT bonus pour numéros qui ne commencent pas par 0
+      if (num[0] !== '0') {
+        score += 12;
+        console.log(`  +12 (ne commence pas par 0) = ${score}`);
+      } else if (len === 13 || len === 8) {
+        score += 5;
+        console.log(`  +5 (EAN peut commencer par 0) = ${score}`);
+      }
 
-      // FORT bonus pour numéros qui ne commencent pas par 0 (sauf EAN valides)
-      if (num[0] !== '0') score += 12;
-      else if (len === 13 || len === 8) score += 5; // EAN peut commencer par 0
-
-      // FORTE pénalité pour numéros qui se terminent par beaucoup de 0
-      const trailingZeros = num.match(/0*$/)?.[0]?.length || 0;
-      if (trailingZeros > 6) score -= 30;
-      else if (trailingZeros > 4) score -= 20;
-      else if (trailingZeros > 2) score -= 10;
-
-      // Bonus pour patterns typiques de codes-barres cartes fidélité
-      if (/^[1-9]\d{12}$/.test(num)) score += 15; // EAN-13 commençant par 1-9
-      if (/^[1-9]\d{11}$/.test(num)) score += 13; // UPC commençant par 1-9
-      if (/^[3-9]\d{7}$/.test(num)) score += 12; // EAN-8 commençant par 3-9
-
-      // Malus pour patterns suspects
-      if (/^(\d)\1{7,}$/.test(num)) score -= 40; // Même chiffre répété
-      if (/^12345/.test(num) || /56789/.test(num)) score -= 25; // Séquences
-      if (/00000/.test(num)) score -= 20; // Trop de zéros consécutifs
-
-      // Bonus pour marques françaises courantes (patterns connus)
-      if (/^3[0-9]{12}$/.test(num)) score += 12; // EAN-13 français (3...)
-      if (/^20[0-9]{11}$/.test(num)) score += 10; // Format 20... (magasins)
-      if (/^[4-6][0-9]{12}$/.test(num)) score += 8; // Autres codes européens
-
+      console.log(`  🏆 SCORE FINAL ${num}: ${score}`);
       return { number: num, score };
     });
 
     // Trier par score décroissant
     scored.sort((a, b) => b.score - a.score);
 
-    return scored[0].number;
+    console.log('📋 CLASSEMENT FINAL:');
+    scored.forEach((item, index) => {
+      console.log(`  ${index + 1}. ${item.number} (${item.score} pts)`);
+    });
+
+    const winner = scored[0].number;
+    console.log(`✅ GAGNANT: ${winner}`);
+
+    return winner;
   }
 
   // Formater les résultats pour l'affichage
