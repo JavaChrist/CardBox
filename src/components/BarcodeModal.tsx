@@ -94,15 +94,15 @@ const BarcodeModal: React.FC<BarcodeModalProps> = ({ card, onClose, onCardUpdate
     return colors[type] || 'from-blue-600 to-blue-700';
   };
 
-  // Génération d'un code-barre plus réaliste basé sur l'ID de la carte
-  const generateBarcode = (seed: string) => {
-    const chars = seed.split('');
+  // Génération d'un code-barre basé sur le vrai numéro de carte détecté
+  const generateBarcode = (cardNumber: string) => {
     const bars = [];
+    const chars = cardNumber.split('');
 
-    for (let i = 0; i < 50; i++) {
+    for (let i = 0; i < 60; i++) {
       const charCode = chars[i % chars.length].charCodeAt(0);
-      const width = (charCode % 3) + 1; // 1-3px
-      const gap = charCode % 2; // 0-1px gap
+      const width = (charCode % 4) + 1; // 1-4px pour plus de variation
+      const gap = charCode % 3 === 0 ? 1 : 0; // Espacement plus réaliste
 
       bars.push({ width, gap, key: i });
     }
@@ -110,8 +110,10 @@ const BarcodeModal: React.FC<BarcodeModalProps> = ({ card, onClose, onCardUpdate
     return bars;
   };
 
-  const barcode = generateBarcode(card.id);
-  const barcodeNumber = card.id.replace(/[^0-9]/g, '').slice(0, 13).padEnd(13, '0');
+  // Utiliser le vrai numéro de carte ou afficher un message
+  const hasRealBarcode = card.cardNumber && card.cardNumber.trim().length >= 8;
+  const barcode = hasRealBarcode ? generateBarcode(card.cardNumber!) : [];
+  const barcodeNumber = hasRealBarcode ? card.cardNumber! : '';
 
   // Fonctions d'édition
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -301,7 +303,12 @@ const BarcodeModal: React.FC<BarcodeModalProps> = ({ card, onClose, onCardUpdate
               <div className="text-right">
                 <p className="text-white text-opacity-60 text-sm">N° de carte</p>
                 <p className="font-mono text-lg font-bold">
-                  **** **** **** {card.id.slice(-4).toUpperCase()}
+                  {card.cardNumber && card.cardNumber.length >= 8
+                    ? card.cardNumber.length > 12
+                      ? `**** **** **** ${card.cardNumber.slice(-4)}`
+                      : card.cardNumber
+                    : `**** **** **** ${card.id.slice(-4).toUpperCase()}`
+                  }
                 </p>
               </div>
             </div>
@@ -311,32 +318,66 @@ const BarcodeModal: React.FC<BarcodeModalProps> = ({ card, onClose, onCardUpdate
               {/* Code-barre principal */}
               <div className="mb-6">
                 <div className="bg-white p-4 rounded-lg border border-gray-200">
-                  <div className="flex justify-center items-end space-x-px mb-3">
-                    {barcode.map((bar) => (
-                      <div key={bar.key} className="flex">
-                        <div
-                          className="bg-gray-900"
-                          style={{
-                            width: `${bar.width}px`,
-                            height: '60px'
-                          }}
-                        />
-                        {bar.gap > 0 && (
-                          <div
-                            className="bg-transparent"
-                            style={{ width: `${bar.gap}px` }}
-                          />
-                        )}
+                  {hasRealBarcode ? (
+                    <>
+                      <div className="flex justify-center items-end space-x-px mb-3">
+                        {barcode.map((bar) => (
+                          <div key={bar.key} className="flex">
+                            <div
+                              className="bg-gray-900"
+                              style={{
+                                width: `${bar.width}px`,
+                                height: '60px'
+                              }}
+                            />
+                            {bar.gap > 0 && (
+                              <div
+                                className="bg-transparent"
+                                style={{ width: `${bar.gap}px` }}
+                              />
+                            )}
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
 
-                  {/* Numéro du code-barre */}
-                  <div className="text-center">
-                    <p className="font-mono text-lg font-bold text-gray-900 tracking-wider">
-                      {barcodeNumber}
-                    </p>
-                  </div>
+                      {/* Numéro du code-barre */}
+                      <div className="text-center">
+                        <p className="font-mono text-lg font-bold text-gray-900 tracking-wider">
+                          {barcodeNumber}
+                        </p>
+                        <p className="text-xs text-green-600 mt-1">📊 Code-barre détecté automatiquement</p>
+                      </div>
+                    </>
+                  ) : (
+                    /* Affichage quand aucun code-barre n'est détecté */
+                    <div className="text-center py-8">
+                      {card.imageUrl ? (
+                        <>
+                          <img
+                            src={card.imageUrl}
+                            alt="Photo de la carte"
+                            className="w-full max-w-xs mx-auto rounded-lg border border-gray-300 mb-3"
+                          />
+                          <p className="text-sm text-gray-600">📸 Photo de votre carte</p>
+                          <p className="text-xs text-amber-600 mt-1">
+                            💡 Utilisez cette image pour présenter votre carte en magasin
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-3">
+                            <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                            </svg>
+                          </div>
+                          <p className="text-sm text-gray-600">Aucun code-barre détecté</p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            Ajoutez une photo pour détecter automatiquement le code-barre
+                          </p>
+                        </>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -370,7 +411,9 @@ const BarcodeModal: React.FC<BarcodeModalProps> = ({ card, onClose, onCardUpdate
                 {/* Numéro de carte personnalisé */}
                 {card.cardNumber && (
                   <div className="flex justify-between items-center text-sm">
-                    <span className="text-gray-600">Numéro personnel</span>
+                    <span className="text-gray-600">
+                      {hasRealBarcode ? 'Code-barre détecté' : 'Numéro de carte'}
+                    </span>
                     <span className="text-gray-900 font-medium font-mono">
                       {card.cardNumber}
                     </span>
