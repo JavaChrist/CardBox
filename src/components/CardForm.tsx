@@ -175,15 +175,20 @@ const CardForm = ({ onCardAdded, onCancel }: CardFormProps) => {
       if (result.success) {
         setShowAnalysisResults(true);
 
-        // PRIORITÉ : Codes-barres détectés par QuaggaJS (plus fiables)
-        if (result.barcodes.length > 0) {
-          setCardNumber(result.barcodes[0]);
-          addDebugLog(`🎯 UTILISE CODE-BARRE: ${result.barcodes[0]}`);
+        // PRIORITÉ 1 : QR codes détectés (LIDL, etc.)
+        if (result.qrcodes.length > 0) {
+          setCardNumber(result.qrcodes[0]);
+          addDebugLog(`🎯 QR CODE UTILISÉ: ${result.qrcodes[0]}`);
         }
-        // SINON : Numéros détectés par OCR (moins fiables)
+        // PRIORITÉ 2 : Codes-barres détectés par QuaggaJS
+        else if (result.barcodes.length > 0) {
+          setCardNumber(result.barcodes[0]);
+          addDebugLog(`📊 CODE-BARRE UTILISÉ: ${result.barcodes[0]}`);
+        }
+        // PRIORITÉ 3 : Utiliser le MEILLEUR numéro OCR (déjà trié par l'algorithme)
         else if (result.numbers.length > 0) {
           setCardNumber(result.numbers[0]);
-          addDebugLog(`⚠️ UTILISE OCR: ${result.numbers[0]}`);
+          addDebugLog(`⭐ NUMÉRO RECOMMANDÉ AUTO-SÉLECTIONNÉ: ${result.numbers[0]}`);
         }
       } else {
         addDebugLog(`❌ ECHEC ANALYSE: Aucune info détectée`);
@@ -437,13 +442,25 @@ const CardForm = ({ onCardAdded, onCancel }: CardFormProps) => {
                 <label htmlFor="cardNumber" className="block text-sm font-medium text-gray-700 mb-2">
                   Numéro de carte (optionnel)
                 </label>
+                {/* Indicateur d'auto-sélection */}
+                {cardNumber && analysisResult && analysisResult.success && (
+                  <div className="mb-2 p-2 bg-green-50 border border-green-200 rounded-lg">
+                    <p className="text-xs text-green-700 flex items-center">
+                      <span className="mr-1">⭐</span>
+                      Numéro recommandé auto-sélectionné - Vous pouvez le modifier ou en choisir un autre ci-dessous
+                    </p>
+                  </div>
+                )}
                 <input
                   id="cardNumber"
                   type="text"
                   value={cardNumber}
                   onChange={(e) => setCardNumber(e.target.value)}
                   placeholder="Ex: 1234567890123"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors font-mono"
+                  className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors font-mono ${cardNumber && analysisResult && analysisResult.success
+                    ? 'border-green-300 bg-green-50'
+                    : 'border-gray-300'
+                    }`}
                 />
               </div>
 
@@ -556,10 +573,43 @@ const CardForm = ({ onCardAdded, onCancel }: CardFormProps) => {
                       <div className="flex-1">
                         <h4 className="font-medium text-green-800 mb-2">✅ Informations détectées</h4>
 
-                        {/* Codes-barres détectés (PRIORITÉ) */}
+                        {/* QR codes détectés (PRIORITÉ ABSOLUE) */}
+                        {analysisResult.qrcodes.length > 0 && (
+                          <div className="mb-3">
+                            <p className="text-sm font-medium text-blue-700 mb-1">📱 QR Codes (ULTRA-FIABLES) :</p>
+                            {analysisResult.qrcodes.map((qrcode, index) => (
+                              <div key={index} className="flex items-center justify-between bg-blue-50 p-3 rounded-lg border border-blue-300 shadow-sm mb-2">
+                                <div className="flex items-center space-x-3">
+                                  <span className="text-lg">🏆</span>
+                                  <div>
+                                    <span className="text-xs font-bold text-blue-700 bg-blue-200 px-2 py-1 rounded-full mb-1 block">
+                                      QR CODE - PRIORITÉ MAX
+                                    </span>
+                                    <span className="font-mono text-sm font-bold text-blue-800 break-all">
+                                      {qrcode.length > 30 ? `${qrcode.substring(0, 30)}...` : qrcode}
+                                    </span>
+                                  </div>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => setCardNumber(qrcode)}
+                                  className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-md hover:bg-blue-700 hover:shadow-sm transition-all"
+                                >
+                                  Utiliser
+                                </button>
+                              </div>
+                            ))}
+                            <p className="text-xs text-blue-600 flex items-center">
+                              <span className="mr-1">🏆</span>
+                              QR codes détectés - Fiabilité maximale (Lidl, etc.)
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Codes-barres détectés (PRIORITÉ HAUTE) */}
                         {analysisResult.barcodes.length > 0 && (
                           <div className="mb-3">
-                            <p className="text-sm font-medium text-green-700 mb-1">🎯 Codes-barres (FIABLES) :</p>
+                            <p className="text-sm font-medium text-green-700 mb-1">📊 Codes-barres (FIABLES) :</p>
                             {analysisResult.barcodes.map((barcode, index) => (
                               <div key={index} className="flex items-center justify-between bg-green-50 p-2 rounded border border-green-200">
                                 <span className="font-mono text-sm font-bold">{barcode}</span>
@@ -572,27 +622,54 @@ const CardForm = ({ onCardAdded, onCancel }: CardFormProps) => {
                                 </button>
                               </div>
                             ))}
-                            <p className="text-xs text-green-600 mt-1">✅ Recommandé: Codes-barres détectés automatiquement</p>
+                            <p className="text-xs text-green-600 mt-1">✅ Codes-barres détectés automatiquement</p>
                           </div>
                         )}
 
-                        {/* Numéros OCR (SECONDAIRE) */}
+                        {/* Numéros OCR avec recommandation intelligente */}
                         {analysisResult.numbers.length > 0 && (
                           <div className="mb-3">
-                            <p className="text-sm font-medium text-orange-700 mb-1">⚠️ Numéros OCR (moins fiables) :</p>
+                            <p className="text-sm font-medium text-orange-700 mb-1">🔢 Numéros détectés (OCR) :</p>
                             {analysisResult.numbers.slice(0, 3).map((number, index) => (
-                              <div key={index} className="flex items-center justify-between bg-orange-50 p-2 rounded border border-orange-200 mb-1">
-                                <span className="font-mono text-sm">{number}</span>
+                              <div key={index} className={`flex items-center justify-between p-3 rounded-lg border mb-2 ${index === 0
+                                ? 'bg-green-50 border-green-300 shadow-sm'
+                                : 'bg-orange-50 border-orange-200'
+                                }`}>
+                                <div className="flex items-center space-x-3">
+                                  {index === 0 && (
+                                    <div className="flex items-center space-x-1">
+                                      <span className="text-lg">⭐</span>
+                                      <span className="text-xs font-bold text-green-700 bg-green-200 px-2 py-1 rounded-full">
+                                        RECOMMANDÉ
+                                      </span>
+                                    </div>
+                                  )}
+                                  <span className={`font-mono text-sm ${index === 0 ? 'font-bold text-green-800' : 'text-orange-800'}`}>
+                                    {number}
+                                  </span>
+                                </div>
                                 <button
                                   type="button"
                                   onClick={() => setCardNumber(number)}
-                                  className="text-xs bg-orange-600 text-white px-2 py-1 rounded hover:bg-orange-700"
+                                  className={`text-xs text-white px-3 py-1.5 rounded-md hover:shadow-sm transition-all ${index === 0
+                                    ? 'bg-green-600 hover:bg-green-700'
+                                    : 'bg-orange-600 hover:bg-orange-700'
+                                    }`}
                                 >
                                   Utiliser
                                 </button>
                               </div>
                             ))}
-                            <p className="text-xs text-orange-600 mt-1">⚠️ Vérifiez que ce numéro correspond à votre carte physique</p>
+                            <div className="text-xs space-y-1">
+                              <p className="text-green-600 flex items-center">
+                                <span className="mr-1">⭐</span>
+                                Le numéro recommandé a le meilleur score de fiabilité
+                              </p>
+                              <p className="text-orange-600 flex items-center">
+                                <span className="mr-1">⚠️</span>
+                                Vérifiez que le numéro choisi correspond à votre carte physique
+                              </p>
+                            </div>
                           </div>
                         )}
 

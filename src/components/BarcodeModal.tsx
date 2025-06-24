@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db, auth } from '../services/firebase';
 import JsBarcode from 'jsbarcode';
+import QRCode from 'qrcode';
 
 interface Card {
   id: string;
@@ -132,45 +133,94 @@ const BarcodeModal: React.FC<BarcodeModalProps> = ({ card, onClose, onCardUpdate
         ctx.clearRect(0, 0, canvas.width, canvas.height);
       }
 
-      // Détection du format optimal
-      const originalNumber = number.trim();
-      const initialFormat = getBarcodeFormat(originalNumber);
+      // 🎯 DETECTION AUTOMATIQUE : QR Code vs Code-barre
+      const isQRCode = isQRCodeData(number);
 
-      // Validation basique
-      if (originalNumber.length < 4 || !initialFormat) {
-        return false;
+      if (isQRCode) {
+        // Générer un QR code
+        generateQRCode(canvas, number);
+      } else {
+        // Générer un code-barre standard
+        generateStandardBarcode(canvas, number);
       }
-
-      // Choisir le bon numéro et format selon les contraintes
-      let barcodeData = originalNumber;
-      const finalFormat = initialFormat;
-
-      // Pour CODE128, utiliser le numéro tel quel (plus robuste)
-      if (initialFormat === 'CODE128') {
-        barcodeData = originalNumber;
-      }
-      // Pour les autres formats (si jamais ils sont encore utilisés)
-      else {
-        barcodeData = originalNumber.replace(/\D/g, '');
-      }
-
-      JsBarcode(canvas, barcodeData, {
-        format: finalFormat,
-        width: 1.8,
-        height: 60,
-        displayValue: true,
-        fontSize: 14,
-        fontOptions: "bold",
-        textMargin: 8,
-        background: "#ffffff",
-        lineColor: "#000000"
-      });
 
       return true;
     } catch {
       return false;
     }
   }, []);
+
+  // Détecter si les données correspondent à un QR code
+  const isQRCodeData = (data: string): boolean => {
+    // QR codes contiennent souvent des URLs, JSON, ou données complexes
+    if (data.startsWith('http') || data.startsWith('https')) return true;
+    if (data.includes('://')) return true; // Autres protocoles
+    if (data.includes('{') && data.includes('}')) return true; // JSON
+    if (data.includes('|') || data.includes(';')) return true; // Séparateurs complexes
+    if (data.length > 50) return true; // Données longues = probablement QR
+    if (/[A-Za-z].*[A-Za-z].*[A-Za-z]/.test(data)) return true; // 3+ lettres = probablement QR
+
+    return false;
+  };
+
+  // Générer un QR code avec qrcode.js
+  const generateQRCode = async (canvas: HTMLCanvasElement, data: string) => {
+    try {
+      await QRCode.toCanvas(canvas, data, {
+        width: 200,
+        margin: 2,
+        color: {
+          dark: '#000000',
+          light: '#FFFFFF'
+        }
+      });
+      console.log('✅ QR CODE GENERE');
+    } catch (error) {
+      console.log('❌ ERREUR QR CODE:', error);
+      // Fallback vers code-barre standard
+      generateStandardBarcode(canvas, data);
+    }
+  };
+
+  // Générer un code-barre standard avec JsBarcode
+  const generateStandardBarcode = (canvas: HTMLCanvasElement, number: string) => {
+    // Détection du format optimal
+    const originalNumber = number.trim();
+    const initialFormat = getBarcodeFormat(originalNumber);
+
+    // Validation basique
+    if (originalNumber.length < 4 || !initialFormat) {
+      return false;
+    }
+
+    // Choisir le bon numéro et format selon les contraintes
+    let barcodeData = originalNumber;
+    const finalFormat = initialFormat;
+
+    // Pour CODE128, utiliser le numéro tel quel (plus robuste)
+    if (initialFormat === 'CODE128') {
+      barcodeData = originalNumber;
+    }
+    // Pour les autres formats (si jamais ils sont encore utilisés)
+    else {
+      barcodeData = originalNumber.replace(/\D/g, '');
+    }
+
+    JsBarcode(canvas, barcodeData, {
+      format: finalFormat,
+      width: 1.8,
+      height: 60,
+      displayValue: true,
+      fontSize: 14,
+      fontOptions: "bold",
+      textMargin: 8,
+      background: "#ffffff",
+      lineColor: "#000000"
+    });
+
+    console.log('✅ CODE-BARRE STANDARD GENERE');
+    return true;
+  };
 
   // Utiliser le vrai numéro de carte - condition améliorée
   const hasRealBarcode = card.cardNumber && card.cardNumber.trim().length >= 4;

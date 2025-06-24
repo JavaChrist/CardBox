@@ -1,8 +1,10 @@
 import Tesseract from 'tesseract.js';
 import Quagga from 'quagga';
+import jsQR from 'jsqr';
 
 export interface AnalysisResult {
   barcodes: string[];
+  qrcodes: string[];
   text: string;
   numbers: string[];
   success: boolean;
@@ -11,13 +13,14 @@ export interface AnalysisResult {
 
 export class ImageAnalysisService {
 
-  // Analyser une image pour extraire codes-barres et texte
+  // Analyser une image pour extraire codes-barres, QR codes et texte
   static async analyzeImage(imageFile: File): Promise<AnalysisResult> {
     try {
-      console.log('🔍 DEBUT ANALYSE IMAGE:', imageFile.name, imageFile.size, 'bytes');
+      console.log('🔍 DEBUT ANALYSE COMPLETE:', imageFile.name, imageFile.size, 'bytes');
 
       const result: AnalysisResult = {
         barcodes: [],
+        qrcodes: [],
         text: '',
         numbers: [],
         success: false
@@ -26,13 +29,22 @@ export class ImageAnalysisService {
       // Créer une URL pour l'image
       const imageUrl = URL.createObjectURL(imageFile);
 
-      // Analyser en parallèle : OCR et lecture de codes-barres
-      const [ocrResult, barcodeResult] = await Promise.allSettled([
+      // Analyser en parallèle : OCR, codes-barres ET QR codes
+      const [ocrResult, barcodeResult, qrCodeResult] = await Promise.allSettled([
         this.performOCR(imageUrl),
-        this.scanBarcodes(imageUrl)
+        this.scanBarcodes(imageUrl),
+        this.scanQRCodes(imageFile) // QR codes utilisent le File directement
       ]);
 
-      // Traiter les résultats codes-barres (PRIORITÉ)
+      // Traiter les résultats QR codes (NOUVELLE PRIORITÉ ABSOLUE)
+      if (qrCodeResult.status === 'fulfilled') {
+        result.qrcodes = qrCodeResult.value;
+        console.log('📱 QR CODES DETECTES:', result.qrcodes);
+      } else {
+        console.log('❌ QR CODES ERREUR:', qrCodeResult.reason);
+      }
+
+      // Traiter les résultats codes-barres (PRIORITÉ HAUTE)
       if (barcodeResult.status === 'fulfilled') {
         result.barcodes = barcodeResult.value;
         console.log('📊 CODES-BARRES QUAGGAJS:', result.barcodes);
@@ -40,7 +52,7 @@ export class ImageAnalysisService {
         console.log('❌ QUAGGAJS ERREUR:', barcodeResult.reason);
       }
 
-      // Traiter les résultats OCR (SECONDAIRE)
+      // Traiter les résultats OCR (FALLBACK)
       if (ocrResult.status === 'fulfilled') {
         result.text = ocrResult.value.text;
         result.numbers = ocrResult.value.numbers;
@@ -53,16 +65,18 @@ export class ImageAnalysisService {
       // Nettoyer l'URL
       URL.revokeObjectURL(imageUrl);
 
-      // Déterminer le succès (prioriser les codes-barres)
-      result.success = result.barcodes.length > 0 || result.numbers.length > 0 || result.text.length > 10;
+      // Déterminer le succès
+      result.success = result.qrcodes.length > 0 || result.barcodes.length > 0 || result.numbers.length > 0 || result.text.length > 10;
 
-      // Si on a des codes-barres QuaggaJS, on privilégie totalement
-      if (result.barcodes.length > 0) {
+      // PRIORITÉ : QR codes > Codes-barres > OCR
+      if (result.qrcodes.length > 0) {
+        console.log('🎯 QR CODES DETECTES - Priorité absolue');
+        result.numbers = []; // Ignorer OCR si QR code détecté
+      } else if (result.barcodes.length > 0) {
         console.log('🎯 CODES-BARRES DETECTES - Ignorant OCR');
-        // Garder seulement les codes-barres, ignorer les numéros OCR potentiellement faux
-        result.numbers = [];
+        result.numbers = []; // Ignorer OCR si code-barre détecté
       } else {
-        console.log('⚠️ AUCUN CODE-BARRE - Utilisation OCR seulement');
+        console.log('⚠️ AUCUN QR/CODE-BARRE - Utilisation OCR seulement');
       }
 
       console.log('✅ RESULTAT FINAL:', result);
@@ -72,6 +86,7 @@ export class ImageAnalysisService {
       console.log('💥 ERREUR ANALYSE GLOBALE:', error);
       return {
         barcodes: [],
+        qrcodes: [],
         text: '',
         numbers: [],
         success: false,
@@ -239,6 +254,86 @@ export class ImageAnalysisService {
     });
   }
 
+  // Scanner les QR codes avec jsQR
+  private static async scanQRCodes(imageFile: File): Promise<string[]> {
+    return new Promise((resolve, reject) => {
+      try {
+        console.log('📱 DEBUT SCAN QR CODES...');
+
+        const img = new Image();
+        let imageUrl: string | null = null;
+
+        img.onload = () => {
+          console.log('🖼️ IMAGE QR CHARGEE:', img.width, 'x', img.height);
+
+          try {
+            // Créer un canvas pour jsQR
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d')!;
+
+            // Redimensionner pour optimiser la détection QR
+            const scale = Math.min(800 / img.width, 800 / img.height, 1);
+            canvas.width = img.width * scale;
+            canvas.height = img.height * scale;
+
+            // Dessiner l'image sur le canvas
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+            // Obtenir les données d'image
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+            // Scanner le QR code
+            const qrCode = jsQR(imageData.data, imageData.width, imageData.height);
+
+            // Cleanup de l'URL
+            if (imageUrl) {
+              URL.revokeObjectURL(imageUrl);
+            }
+
+            if (qrCode) {
+              console.log('✅ QR CODE DETECTE:', qrCode.data);
+              resolve([qrCode.data]);
+            } else {
+              console.log('❌ AUCUN QR CODE DETECTE');
+              resolve([]);
+            }
+          } catch (error) {
+            console.log('💥 ERREUR TRAITEMENT QR:', error);
+            if (imageUrl) {
+              URL.revokeObjectURL(imageUrl);
+            }
+            reject(error);
+          }
+        };
+
+        img.onerror = () => {
+          console.log('❌ ERREUR CHARGEMENT IMAGE QR');
+          if (imageUrl) {
+            URL.revokeObjectURL(imageUrl);
+          }
+          reject(new Error('Impossible de charger l\'image pour QR scan'));
+        };
+
+        // Charger l'image
+        imageUrl = URL.createObjectURL(imageFile);
+        img.src = imageUrl;
+
+        // Timeout pour éviter les blocages
+        setTimeout(() => {
+          console.log('⏰ TIMEOUT QR SCAN (10s)');
+          if (imageUrl) {
+            URL.revokeObjectURL(imageUrl);
+          }
+          resolve([]);
+        }, 10000);
+
+      } catch (error) {
+        console.log('💥 ERREUR QR SCAN GLOBALE:', error);
+        reject(error);
+      }
+    });
+  }
+
   // Extraire les numéros de carte du texte OCR
   private static extractCardNumbers(text: string): string[] {
     const numbers: string[] = [];
@@ -337,14 +432,7 @@ export class ImageAnalysisService {
     if (numbers.length === 0) return null;
     if (numbers.length === 1) return numbers[0];
 
-    console.log('🎯 DEBUT SELECTION parmi:', numbers);
-
-    // PRIORITÉ ABSOLUE pour Castorama 913... si présent
-    const castoramaNumber = numbers.find(num => /^913\d{16}$/.test(num));
-    if (castoramaNumber) {
-      console.log('🏆 CASTORAMA TROUVÉ - SÉLECTION IMMÉDIATE:', castoramaNumber);
-      return castoramaNumber;
-    }
+    console.log('🎯 DEBUT SELECTION INTELLIGENTE parmi:', numbers);
 
     // Scores pour chaque numéro
     const scored = numbers.map(num => {
@@ -353,82 +441,175 @@ export class ImageAnalysisService {
 
       console.log(`📊 SCORING ${num} (longueur: ${len})`);
 
-      // NOUVELLE PRIORITÉ : Longueurs de cartes de fidélité réelles
-      if (len === 19) {
-        score += 30;
-        console.log(`  +30 (19 chiffres) = ${score}`);
-      } else if (len === 18) {
-        score += 28;
-        console.log(`  +28 (18 chiffres) = ${score}`);
-      } else if (len === 16 || len === 17) {
-        score += 25;
-        console.log(`  +25 (16-17 chiffres) = ${score}`);
-      } else if (len === 13) {
-        score += 20;
-        console.log(`  +20 (13 chiffres) = ${score}`);
-      } else if (len === 12) {
-        score += 18;
-        console.log(`  +18 (12 chiffres) = ${score}`);
+      // 🚫 ÉLIMINATION IMMÉDIATE des numéros suspects
+      if (this.isSuspiciousNumber(num)) {
+        score = -1000;
+        console.log(`  ❌ NUMÉRO SUSPECT ÉLIMINÉ = ${score}`);
+        return { number: num, score };
+      }
+
+      // ✅ LONGUEURS OPTIMALES (basées sur vraies cartes de fidélité)
+      if (len === 13) {
+        score += 25; // EAN-13 standard
+        console.log(`  +25 (EAN-13 standard) = ${score}`);
       } else if (len === 8) {
-        score += 15;
-        console.log(`  +15 (8 chiffres) = ${score}`);
+        score += 20; // EAN-8 court
+        console.log(`  +20 (EAN-8 court) = ${score}`);
+      } else if (len === 12) {
+        score += 18; // UPC-A
+        console.log(`  +18 (UPC-A) = ${score}`);
       } else if (len === 10 || len === 11) {
-        score += 12;
-        console.log(`  +12 (10-11 chiffres) = ${score}`);
-      } else if (len === 14 || len === 15) {
-        score += 10;
-        console.log(`  +10 (14-15 chiffres) = ${score}`);
-      } else if (len > 20) {
-        score -= 30;
-        console.log(`  -30 (trop long) = ${score}`);
-      } else if (len < 6) {
-        score -= 25;
-        console.log(`  -25 (trop court) = ${score}`);
+        score += 15; // Cartes locales
+        console.log(`  +15 (carte locale) = ${score}`);
+      } else if (len === 14 || len === 15 || len === 16) {
+        score += 10; // Acceptables
+        console.log(`  +10 (longueur acceptable) = ${score}`);
+      } else if (len === 17 || len === 18) {
+        score += 5; // Limites hautes
+        console.log(`  +5 (limite haute) = ${score}`);
+      } else if (len >= 19) {
+        score -= 50; // FORTE pénalité pour trop long
+        console.log(`  -50 (TROP LONG) = ${score}`);
+      } else if (len < 8) {
+        score -= 30; // Trop court
+        console.log(`  -30 (trop court) = ${score}`);
       }
 
-      // BONUS ÉNORME pour patterns spécifiques de grandes enseignes
+      // 🎯 BONUS PATTERNS SPÉCIFIQUES FRANÇAIS
       if (/^913\d{16}$/.test(num)) {
-        score += 50;
-        console.log(`  +50 (CASTORAMA 913...) = ${score}`);
-      }
-      if (/^20\d{16,17}$/.test(num)) {
-        score += 40;
-        console.log(`  +40 (Super U/Leclerc 20...) = ${score}`);
-      }
-      if (/^345\d{15,16}$/.test(num)) {
-        score += 35;
-        console.log(`  +35 (Carrefour 345...) = ${score}`);
-      }
-      if (/^[1-9]\d{18}$/.test(num)) {
-        score += 25;
-        console.log(`  +25 (19 chiffres valide) = ${score}`);
+        score += 40; // Castorama
+        console.log(`  +40 (Castorama 913...) = ${score}`);
+      } else if (/^20\d{11,13}$/.test(num)) {
+        score += 35; // Super U / Intermarché
+        console.log(`  +35 (Super U/Intermarché 20...) = ${score}`);
+      } else if (/^893\d{10,13}$/.test(num)) {
+        score += 35; // Pattern Super U alternatif
+        console.log(`  +35 (Super U 893...) = ${score}`);
+      } else if (/^345\d{10,13}$/.test(num)) {
+        score += 30; // Carrefour
+        console.log(`  +30 (Carrefour 345...) = ${score}`);
+      } else if (/^184\d{14,16}$/.test(num)) {
+        score += 30; // McDonald's réel
+        console.log(`  +30 (McDonald's 184...) = ${score}`);
+      } else if (/^555\d{10,13}$/.test(num)) {
+        score += 25; // Certains formats
+        console.log(`  +25 (Format 555...) = ${score}`);
       }
 
-      // FORT bonus pour numéros qui ne commencent pas par 0
-      if (num[0] !== '0') {
-        score += 12;
-        console.log(`  +12 (ne commence pas par 0) = ${score}`);
-      } else if (len === 13 || len === 8) {
-        score += 5;
-        console.log(`  +5 (EAN peut commencer par 0) = ${score}`);
+      // ✅ BONUS STRUCTURE NUMÉRIQUE
+      if (num[0] !== '0' && len >= 10) {
+        score += 10; // Ne commence pas par 0
+        console.log(`  +10 (ne commence pas par 0) = ${score}`);
+      }
+
+      // ✅ BONUS DIVERSITÉ DES CHIFFRES
+      const uniqueDigits = new Set(num).size;
+      if (uniqueDigits >= 6) {
+        score += 15; // Bonne diversité
+        console.log(`  +15 (${uniqueDigits} chiffres uniques) = ${score}`);
+      } else if (uniqueDigits >= 4) {
+        score += 8; // Diversité moyenne
+        console.log(`  +8 (${uniqueDigits} chiffres uniques) = ${score}`);
+      } else {
+        score -= 20; // Faible diversité
+        console.log(`  -20 (seulement ${uniqueDigits} chiffres uniques) = ${score}`);
+      }
+
+      // 🚫 PÉNALITÉ PATTERNS RÉPÉTITIFS
+      const repetitionPenalty = this.calculateRepetitionPenalty(num);
+      score -= repetitionPenalty;
+      if (repetitionPenalty > 0) {
+        console.log(`  -${repetitionPenalty} (patterns répétitifs) = ${score}`);
       }
 
       console.log(`  🏆 SCORE FINAL ${num}: ${score}`);
       return { number: num, score };
     });
 
+    // Éliminer les numéros avec score négatif
+    const validNumbers = scored.filter(item => item.score > 0);
+
+    if (validNumbers.length === 0) {
+      console.log('❌ AUCUN NUMÉRO VALIDE - Utilisation du moins mauvais');
+      scored.sort((a, b) => b.score - a.score);
+      return scored[0].number;
+    }
+
     // Trier par score décroissant
-    scored.sort((a, b) => b.score - a.score);
+    validNumbers.sort((a, b) => b.score - a.score);
 
     console.log('📋 CLASSEMENT FINAL:');
-    scored.forEach((item, index) => {
+    validNumbers.forEach((item, index) => {
       console.log(`  ${index + 1}. ${item.number} (${item.score} pts)`);
     });
 
-    const winner = scored[0].number;
+    const winner = validNumbers[0].number;
     console.log(`✅ GAGNANT: ${winner}`);
 
     return winner;
+  }
+
+  // Détecter les numéros suspects (probablement des erreurs OCR)
+  private static isSuspiciousNumber(num: string): boolean {
+    // Trop long (probablement parasitage OCR)
+    if (num.length > 20) {
+      console.log(`  ⚠️ Suspect: trop long (${num.length})`);
+      return true;
+    }
+
+    // Patterns répétitifs excessifs
+    if (/(\d)\1{6,}/.test(num)) { // 7+ chiffres identiques consécutifs
+      console.log(`  ⚠️ Suspect: répétitions excessives`);
+      return true;
+    }
+
+    // Commencer par des patterns d'erreur OCR
+    if (/^(111111|000000|555555|999999)/.test(num)) {
+      console.log(`  ⚠️ Suspect: commence par pattern d'erreur`);
+      return true;
+    }
+
+    // Trop de chiffres identiques
+    const digitCounts: Record<string, number> = {};
+    for (const digit of num) {
+      digitCounts[digit] = (digitCounts[digit] || 0) + 1;
+    }
+
+    const maxCount = Math.max(...Object.values(digitCounts) as number[]);
+    const dominanceRatio = maxCount / num.length;
+
+    if (dominanceRatio > 0.6) { // Plus de 60% du même chiffre
+      console.log(`  ⚠️ Suspect: ${Math.round(dominanceRatio * 100)}% du même chiffre`);
+      return true;
+    }
+
+    return false;
+  }
+
+  // Calculer la pénalité pour les patterns répétitifs
+  private static calculateRepetitionPenalty(num: string): number {
+    let penalty = 0;
+
+    // Séquences répétitives
+    const repetitions = num.match(/(\d)\1{2,}/g); // 3+ chiffres identiques
+    if (repetitions) {
+      repetitions.forEach(rep => {
+        const length = rep.length;
+        penalty += length * 5; // 5 points par chiffre répété
+      });
+    }
+
+    // Patterns simples (123, 789, 000, etc.)
+    if (/123456|234567|345678|456789|987654|876543/.test(num)) {
+      penalty += 25;
+    }
+
+    // Alternances simples (121212, 545454)
+    if (/(\d)(\d)\1\2\1\2/.test(num)) {
+      penalty += 15;
+    }
+
+    return Math.min(penalty, 100); // Limiter à 100 points max
   }
 
   // Formater les résultats pour l'affichage
