@@ -8,7 +8,16 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['logob192.png', 'logob512.png', 'vite.svg', 'logo.svg'],
+      includeAssets: [
+        'logo16.png',
+        'logo32.png',
+        'logo48.png',
+        'logo192.png',
+        'logo512.png',
+        'favicon.ico',
+        'apple-touch-icon.png',
+        'logo.svg'
+      ],
       manifest: {
         name: 'CardBox - Portefeuille Digital',
         short_name: 'CardBox',
@@ -23,13 +32,13 @@ export default defineConfig({
         lang: 'fr',
         icons: [
           {
-            src: '/logob192.png',
+            src: '/logo192.png',
             sizes: '192x192',
             type: 'image/png',
             purpose: 'any maskable'
           },
           {
-            src: '/logob512.png',
+            src: '/logo512.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'any maskable'
