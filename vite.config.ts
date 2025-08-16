@@ -27,24 +27,24 @@ export default defineConfig({
         display: 'standalone',
         orientation: 'portrait',
         background_color: '#ffffff',
-        theme_color: '#3b82f6',
+        theme_color: '#3b82f6', // bump query param in icons to force cache refresh on iOS
         categories: ['productivity', 'finance'],
         lang: 'fr',
         icons: [
           {
-            src: '/logo192.png',
+            src: '/logo192.png?v=cbx3d',
             sizes: '192x192',
             type: 'image/png',
             purpose: 'any maskable'
           },
           {
-            src: '/logo512.png',
+            src: '/logo512.png?v=cbx3d',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'any maskable'
           },
           {
-            src: '/logo.svg',
+            src: '/logo.svg?v=cbx3d',
             sizes: 'any',
             type: 'image/svg+xml',
             purpose: 'any maskable'
