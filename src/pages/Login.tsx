@@ -33,7 +33,7 @@ const Login = () => {
         <div className="text-center">
           <div className="flex justify-center mb-4">
             <img
-              src="/logob192.png"
+              src="/logo192.png"
               alt="CardBox Logo"
               className="h-16 w-16 rounded-2xl shadow-lg"
               onError={(e) => {

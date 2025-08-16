@@ -8,7 +8,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['logob192.png', 'logob512.png', 'vite.svg'],
+      includeAssets: ['logob192.png', 'logob512.png', 'vite.svg', 'logo.svg'],
       manifest: {
         name: 'CardBox - Portefeuille Digital',
         short_name: 'CardBox',
@@ -32,6 +32,12 @@ export default defineConfig({
             src: '/logob512.png',
             sizes: '512x512',
             type: 'image/png',
+            purpose: 'any maskable'
+          },
+          {
+            src: '/logo.svg',
+            sizes: 'any',
+            type: 'image/svg+xml',
             purpose: 'any maskable'
           }
         ]

@@ -71,7 +71,7 @@ const Dashboard = () => {
           <div className="flex justify-between items-center py-6">
             <div className="flex items-center space-x-3">
               <img
-                src="/logob192.png"
+                src="/logo192.png"
                 alt="CardBox Logo"
                 className="h-10 w-10 rounded-lg shadow-sm"
                 onError={(e) => {
@@ -82,9 +82,7 @@ const Dashboard = () => {
               <span className="text-2xl hidden">📦</span>
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">CardBox</h1>
-                <p className="text-sm text-gray-500">
-                  Gestion des cartes de fidélité
-                </p>
+                <p className="text-sm text-gray-500">Gestion des cartes de fidélité</p>
               </div>
             </div>
             <div className="flex items-center space-x-4">
