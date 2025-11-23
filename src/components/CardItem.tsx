@@ -141,6 +141,20 @@ const CardItem = ({ card, onCardDeleted, onCardUpdated }: CardItemProps) => {
 
         {/* Corps de la carte */}
         <div className="p-4 bg-gradient-to-br from-gray-50 to-white">
+          {/* Photo visible si disponible */}
+          {card.imageUrl && (
+            <div className="mb-3">
+              <img
+                src={card.imageUrl}
+                alt={card.name}
+                className="w-full h-32 object-cover rounded-lg border border-gray-200"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowBarcodeModal(true);
+                }}
+              />
+            </div>
+          )}
           {/* Simulation d'un code-barre */}
           <div className="mb-3">
             <div className="flex justify-center space-x-px mb-2">

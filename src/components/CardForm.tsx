@@ -1,8 +1,8 @@
-import { useState, useCallback } from 'react';
+import { useState } from 'react';
 import { collection, addDoc } from 'firebase/firestore';
-import { db, auth } from '../services/firebase';
+import { db, auth, storage } from '../services/firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { popularBrands } from '../data/popularBrands';
-import { ImageAnalysisService, type AnalysisResult } from '../services/imageAnalysisService';
 
 interface PopularBrand {
   id: string;
@@ -40,61 +40,11 @@ const CardForm = ({ onCardAdded, onCancel }: CardFormProps) => {
   const [customBrandName, setCustomBrandName] = useState('');
   const [cardNumber, setCardNumber] = useState('');
   const [note, setNote] = useState('');
-  const [, setImage] = useState<File | null>(null);
+  const [image, setImage] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [analyzing, setAnalyzing] = useState(false);
-  const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
-  const [showAnalysisResults, setShowAnalysisResults] = useState(false);
-
-  // DEBUG pour mobile
-  const [debugLogs, setDebugLogs] = useState<string[]>([]);
-  const [showDebug, setShowDebug] = useState(false);
-
-  // États pour l'auto-sélection intelligente
-  const [autoSelectedValue, setAutoSelectedValue] = useState<string>('');
-  const [autoSelectionType, setAutoSelectionType] = useState<string>('');
-
-  // Auto-sélectionner intelligemment le meilleur numéro
-  const autoSelectBestNumber = useCallback((result: AnalysisResult) => {
-    console.log('🎯 AUTO-SELECTION INTELLIGENTE...');
-
-    // PRIORITÉ 1 : QR codes (absolu)
-    if (result.qrcodes.length > 0) {
-      const selectedQR = result.qrcodes[0];
-      console.log('🏆 AUTO-SELECTION QR CODE:', selectedQR);
-      setCardNumber(selectedQR);
-      setAutoSelectedValue(selectedQR);
-      setAutoSelectionType('QR code');
-      return;
-    }
-
-    // PRIORITÉ 2 : Codes-barres (haute)
-    if (result.barcodes.length > 0) {
-      const selectedBarcode = result.barcodes[0];
-      console.log('✅ AUTO-SELECTION CODE-BARRE:', selectedBarcode);
-      setCardNumber(selectedBarcode);
-      setAutoSelectedValue(selectedBarcode);
-      setAutoSelectionType('code-barre');
-      return;
-    }
-
-    // PRIORITÉ 3 : OCR (fallback)
-    if (result.numbers.length > 0) {
-      const selectedNumber = result.numbers[0]; // Premier = recommandé
-      console.log('⚠️ AUTO-SELECTION OCR:', selectedNumber);
-      setCardNumber(selectedNumber);
-      setAutoSelectedValue(selectedNumber);
-      setAutoSelectionType('numéro OCR');
-      return;
-    }
-
-    console.log('❌ AUCUNE AUTO-SELECTION POSSIBLE');
-  }, []);
-
-  const addDebugLog = (message: string) => {
-    setDebugLogs(prev => [...prev.slice(-10), `${new Date().toLocaleTimeString()}: ${message}`]);
-  };
+  // Simplification: pas d'analyse automatique
+  // Flux simplifié: pas d'analyse automatique, pas d'auto-sélection
 
   const handleBrandSelect = (brand: PopularBrand) => {
     setSelectedBrand(brand);
@@ -133,9 +83,7 @@ const CardForm = ({ onCardAdded, onCancel }: CardFormProps) => {
             setPreviewUrl(reader.result as string);
           };
           reader.readAsDataURL(file);
-
-          // Analyser automatiquement l'image
-          await analyzeImage(file);
+          // Simplifié: pas d'analyse, la photo est juste affichée
         }
         // Nettoyer l'input temporaire
         try {
@@ -183,50 +131,11 @@ const CardForm = ({ onCardAdded, onCancel }: CardFormProps) => {
         setPreviewUrl(reader.result as string);
       };
       reader.readAsDataURL(file);
-
-      // Analyser automatiquement l'image
-      await analyzeImage(file);
+      // Simplifié: pas d'analyse
     }
   };
 
-  const analyzeImage = async (file: File) => {
-    try {
-      setAnalyzing(true);
-      setAnalysisResult(null);
-      setShowAnalysisResults(false);
-      setDebugLogs([]);
-      setShowDebug(true);
-
-      addDebugLog(`🔍 DEBUT ANALYSE: ${file.name} (${file.size} bytes)`);
-
-      const result = await ImageAnalysisService.analyzeImage(file);
-
-      addDebugLog(`📊 QuaggaJS: ${result.barcodes.length} codes détectés`);
-      if (result.barcodes.length > 0) {
-        addDebugLog(`✅ CODES: ${result.barcodes.join(', ')}`);
-      }
-
-      addDebugLog(`🔢 OCR: ${result.numbers.length} numéros détectés`);
-      if (result.numbers.length > 0) {
-        addDebugLog(`📝 NUMEROS: ${result.numbers.slice(0, 3).join(', ')}`);
-      }
-
-      setAnalysisResult(result);
-
-      if (result.success) {
-        setShowAnalysisResults(true);
-
-        // Auto-sélectionner intelligemment le meilleur numéro
-        autoSelectBestNumber(result);
-      } else {
-        addDebugLog(`❌ ECHEC ANALYSE: Aucune info détectée`);
-      }
-    } catch (error) {
-      addDebugLog(`💥 ERREUR: ${error}`);
-    } finally {
-      setAnalyzing(false);
-    }
-  };
+  // analyzeImage supprimé dans le flux simplifié
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -250,7 +159,16 @@ const CardForm = ({ onCardAdded, onCancel }: CardFormProps) => {
       // Utiliser le nom personnalisé si c'est une marque "divers"
       const finalBrandName = selectedBrand.id === 'divers' ? customBrandName.trim() : selectedBrand.name;
 
-      // Sauvegarde en base (sans photo - juste les données)
+      // Upload éventuel de la photo pour l'afficher ensuite
+      let uploadedUrl = '';
+      if (image) {
+        const path = `cards/${user.uid}/${Date.now()}_${selectedBrand.id || 'custom'}.jpg`;
+        const storageRef = ref(storage, path);
+        await uploadBytes(storageRef, image);
+        uploadedUrl = await getDownloadURL(storageRef);
+      }
+
+      // Sauvegarde en base (avec URL photo si fournie)
       const cardData = {
         name: finalBrandName,
         type: selectedBrand.category,
@@ -258,7 +176,7 @@ const CardForm = ({ onCardAdded, onCancel }: CardFormProps) => {
         logoUrl: selectedBrand.logoUrl,
         cardNumber: cardNumber.trim(),
         note: note.trim(),
-        imageUrl: '', // Plus de stockage d'images
+        imageUrl: uploadedUrl,
         userId: user.uid,
         createdAt: new Date()
       };
@@ -278,9 +196,7 @@ const CardForm = ({ onCardAdded, onCancel }: CardFormProps) => {
       setNote('');
       setImage(null);
       setPreviewUrl(null);
-      setAnalyzing(false);
-      setAnalysisResult(null);
-      setShowAnalysisResults(false);
+      // États d'analyse non utilisés dans le flux simplifié
 
       onCardAdded(newCard);
     } catch {
@@ -367,7 +283,7 @@ const CardForm = ({ onCardAdded, onCancel }: CardFormProps) => {
             <div className="p-6">
               <p className="text-gray-600 mb-6 text-center">Comment souhaitez-vous ajouter votre carte ?</p>
 
-              <div className="space-y-4">
+                  <div className="space-y-4">
                 <button
                   onClick={() => handleMethodSelect('scan')}
                   className="w-full flex items-center space-x-4 p-6 bg-blue-50 hover:bg-blue-100 rounded-xl transition-colors border-2 border-transparent hover:border-blue-200"
@@ -376,8 +292,8 @@ const CardForm = ({ onCardAdded, onCancel }: CardFormProps) => {
                     📱
                   </div>
                   <div className="flex-1 text-left">
-                    <h3 className="font-semibold text-gray-900">Prendre une photo</h3>
-                    <p className="text-sm text-gray-600">Analyse automatique des codes-barres et numéros</p>
+                        <h3 className="font-semibold text-gray-900">Prendre une photo</h3>
+                        <p className="text-sm text-gray-600">La photo sera simplement affichée sur la carte</p>
                   </div>
                   <svg className="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
@@ -468,39 +384,16 @@ const CardForm = ({ onCardAdded, onCancel }: CardFormProps) => {
               {/* Numéro de carte */}
               <div>
                 <label htmlFor="cardNumber" className="block text-sm font-medium text-gray-700 mb-2">
-                  Numéro de carte (optionnel)
+                  Numéro de carte (affiché en code‑barres / QR dans la carte)
                 </label>
-                {/* Indicateur d'auto-sélection */}
-                {cardNumber && analysisResult && analysisResult.success && (
-                  <div className="mb-2 p-2 bg-green-50 border border-green-200 rounded-lg">
-                    <p className="text-xs text-green-700 flex items-center">
-                      <span className="mr-1">⭐</span>
-                      Numéro recommandé auto-sélectionné - Vous pouvez le modifier ou en choisir un autre ci-dessous
-                    </p>
-                  </div>
-                )}
                 <input
                   id="cardNumber"
                   type="text"
                   value={cardNumber}
                   onChange={(e) => setCardNumber(e.target.value)}
                   placeholder="Ex: 123456789012345"
-                  className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors font-mono ${cardNumber && analysisResult && analysisResult.success
-                    ? 'border-green-300 bg-green-50'
-                    : 'border-gray-300'
-                    }`}
+                  className="w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors font-mono border-gray-300"
                 />
-
-                {/* Indicateur d'auto-sélection */}
-                {autoSelectedValue && cardNumber === autoSelectedValue && (
-                  <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded-md">
-                    <p className="text-xs text-blue-700 flex items-center">
-                      <span className="mr-1">✨</span>
-                      <strong>Auto-sélectionné :</strong> {autoSelectionType}
-                      <span className="ml-2 text-blue-600">({autoSelectedValue.length} caractères)</span>
-                    </p>
-                  </div>
-                )}
               </div>
 
               {/* Note */}
@@ -585,189 +478,7 @@ const CardForm = ({ onCardAdded, onCancel }: CardFormProps) => {
                   <span>📸 Prendre une photo</span>
                 </button>
 
-                {/* Indicateur d'analyse en cours */}
-                {analyzing && (
-                  <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-xl">
-                    <div className="flex items-center justify-center space-x-3">
-                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-                      <div className="text-blue-700">
-                        <p className="font-medium">🔍 Analyse en cours...</p>
-                        <p className="text-sm">Détection des codes-barres et texte</p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Résultats de l'analyse */}
-                {showAnalysisResults && analysisResult && (
-                  <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-xl">
-                    <div className="flex items-start space-x-3">
-                      <div className="flex-shrink-0">
-                        <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center">
-                          <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                          </svg>
-                        </div>
-                      </div>
-                      <div className="flex-1">
-                        <h4 className="font-medium text-green-800 mb-2">✅ Informations détectées</h4>
-
-                        {/* QR codes détectés (PRIORITÉ ABSOLUE) */}
-                        {analysisResult.qrcodes.length > 0 && (
-                          <div className="mb-3">
-                            <p className="text-sm font-medium text-blue-700 mb-2">📱 QR Codes (PRIORITÉ MAX) :</p>
-                            {analysisResult.qrcodes.map((qrcode, index) => (
-                              <div key={index} className="bg-blue-50 p-3 rounded-lg border border-blue-300 shadow-sm mb-2">
-                                <div className="flex items-center space-x-2 mb-2">
-                                  <span className="text-lg">🏆</span>
-                                  <span className="text-xs font-bold text-blue-700 bg-blue-200 px-2 py-1 rounded-full">
-                                    QR CODE - PRIORITÉ MAX
-                                  </span>
-                                </div>
-                                <div className="bg-white p-2 rounded border border-blue-200 mb-2">
-                                  <span className="font-mono text-xs text-blue-800 break-all leading-relaxed">
-                                    {qrcode}
-                                  </span>
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={() => setCardNumber(qrcode)}
-                                  className="w-full text-sm bg-blue-600 text-white py-2 px-3 rounded-md hover:bg-blue-700 transition-all"
-                                >
-                                  ✅ Utiliser ce QR Code
-                                </button>
-                              </div>
-                            ))}
-                            <p className="text-xs text-blue-600 flex items-center mt-2">
-                              <span className="mr-1">🏆</span>
-                              QR codes détectés - Fiabilité maximale (Lidl, etc.)
-                            </p>
-                          </div>
-                        )}
-
-                        {/* Codes-barres détectés (PRIORITÉ HAUTE) */}
-                        {analysisResult.barcodes.length > 0 && (
-                          <div className="mb-3">
-                            <p className="text-sm font-medium text-green-700 mb-2">📊 Codes-barres (FIABLES) :</p>
-                            {analysisResult.barcodes.map((barcode, index) => (
-                              <div key={index} className="bg-green-50 p-3 rounded-lg border border-green-200 mb-2">
-                                <div className="bg-white p-2 rounded border border-green-200 mb-2">
-                                  <span className="font-mono text-sm font-bold text-green-800 break-all">
-                                    {barcode}
-                                  </span>
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={() => setCardNumber(barcode)}
-                                  className="w-full text-sm bg-green-600 text-white py-2 px-3 rounded-md hover:bg-green-700 transition-all"
-                                >
-                                  ✅ Utiliser ce code-barre
-                                </button>
-                              </div>
-                            ))}
-                            <p className="text-xs text-green-600 mt-2">✅ Codes-barres détectés automatiquement</p>
-                          </div>
-                        )}
-
-                        {/* Numéros OCR avec recommandation intelligente */}
-                        {analysisResult.numbers.length > 0 && (
-                          <div className="mb-3">
-                            <p className="text-sm font-medium text-orange-700 mb-2">🔢 Numéros détectés (OCR) :</p>
-                            {analysisResult.numbers.slice(0, 3).map((number, index) => (
-                              <div key={index} className={`p-3 rounded-lg border mb-2 ${index === 0
-                                ? 'bg-green-50 border-green-300 shadow-sm'
-                                : 'bg-orange-50 border-orange-200'
-                                }`}>
-                                {index === 0 && (
-                                  <div className="flex items-center space-x-2 mb-2">
-                                    <span className="text-lg">⭐</span>
-                                    <span className="text-xs font-bold text-green-700 bg-green-200 px-2 py-1 rounded-full">
-                                      RECOMMANDÉ
-                                    </span>
-                                  </div>
-                                )}
-                                <div className={`bg-white p-2 rounded border mb-2 ${index === 0 ? 'border-green-200' : 'border-orange-200'
-                                  }`}>
-                                  <span className={`font-mono text-sm break-all ${index === 0 ? 'font-bold text-green-800' : 'text-orange-800'
-                                    }`}>
-                                    {number}
-                                  </span>
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={() => setCardNumber(number)}
-                                  className={`w-full text-sm text-white py-2 px-3 rounded-md hover:shadow-sm transition-all ${index === 0
-                                    ? 'bg-green-600 hover:bg-green-700'
-                                    : 'bg-orange-600 hover:bg-orange-700'
-                                    }`}
-                                >
-                                  {index === 0 ? '⭐ Utiliser (recommandé)' : '⚠️ Utiliser ce numéro'}
-                                </button>
-                              </div>
-                            ))}
-                            <div className="text-xs space-y-1 mt-2">
-                              <p className="text-green-600 flex items-start">
-                                <span className="mr-1 mt-0.5">⭐</span>
-                                <span>Le numéro recommandé a le meilleur score de fiabilité</span>
-                              </p>
-                              <p className="text-orange-600 flex items-start">
-                                <span className="mr-1 mt-0.5">⚠️</span>
-                                <span>Vérifiez que le numéro choisi correspond à votre carte physique</span>
-                              </p>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Bouton pour cacher les résultats */}
-                        <button
-                          type="button"
-                          onClick={() => setShowAnalysisResults(false)}
-                          className="text-xs text-green-600 hover:text-green-800 underline"
-                        >
-                          Masquer les résultats
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Message si aucune information détectée */}
-                {analysisResult && !analysisResult.success && !analyzing && (
-                  <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-xl">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-8 h-8 bg-yellow-500 rounded-full flex items-center justify-center">
-                        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                        </svg>
-                      </div>
-                      <div>
-                        <p className="font-medium text-yellow-800">⚠️ Aucune information détectée</p>
-                        <p className="text-sm text-yellow-700">Vous pouvez saisir manuellement les informations</p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* DEBUG pour mobile */}
-                {showDebug && debugLogs.length > 0 && (
-                  <div className="mt-4 p-3 bg-gray-900 text-green-400 rounded-xl text-xs font-mono">
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-white font-bold">🔍 DEBUG ANALYSE</span>
-                      <button
-                        type="button"
-                        onClick={() => setShowDebug(false)}
-                        className="text-gray-400 hover:text-white"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                    <div className="max-h-32 overflow-y-auto space-y-1">
-                      {debugLogs.map((log, index) => (
-                        <div key={index} className="text-xs">{log}</div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                {/* Interface simplifiée: pas d'analyse automatique */}
               </div>
 
               {/* Boutons */}
