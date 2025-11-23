@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import JsBarcode from 'jsbarcode';
+import QRCode from 'qrcode';
 import { deleteDoc, doc } from 'firebase/firestore';
 import { deleteObject, ref } from 'firebase/storage';
 import { db, storage } from '../services/firebase';
@@ -10,6 +12,7 @@ interface Card {
   type: string;
   imageUrl: string;
   codeImageUrl?: string;
+  codeDisplay?: 'qr' | 'barcode';
   createdAt: Date;
   userId: string;
   brandId?: string;
@@ -28,6 +31,36 @@ const CardItem = ({ card, onCardDeleted, onCardUpdated }: CardItemProps) => {
   const [loading, setLoading] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [showBarcodeModal, setShowBarcodeModal] = useState(false);
+  const codeCanvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = codeCanvasRef.current;
+    if (!canvas) return;
+    const number = (card.cardNumber || '').trim();
+    if (!number || number.length < 1) return;
+    const ctx = canvas.getContext('2d');
+    if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    const displayQR = card.codeDisplay === 'qr';
+    if (displayQR) {
+      QRCode.toCanvas(canvas, number, {
+        width: 200,
+        margin: 1,
+        color: { dark: '#000000', light: '#FFFFFF' }
+      }).catch(() => {});
+    } else {
+      JsBarcode(canvas, number, {
+        format: 'CODE128',
+        width: 1.6,
+        height: 54,
+        displayValue: true,
+        fontSize: 12,
+        textMargin: 6,
+        background: '#ffffff',
+        lineColor: '#000000'
+      });
+    }
+  }, [card.cardNumber, card.codeDisplay]);
 
 
 
@@ -142,6 +175,12 @@ const CardItem = ({ card, onCardDeleted, onCardUpdated }: CardItemProps) => {
 
         {/* Corps de la carte */}
         <div className="p-4 bg-gradient-to-br from-gray-50 to-white">
+          {/* Code généré depuis la saisie (QR ou code-barres) */}
+          {card.cardNumber && (
+            <div className="mb-3 bg-white border border-gray-200 rounded-lg p-3 flex justify-center">
+              <canvas ref={codeCanvasRef} className="max-w-full h-auto" />
+            </div>
+          )}
           {/* Photo du code si disponible */}
           {card.codeImageUrl && (
             <div className="mb-3">

@@ -20,6 +20,7 @@ interface Card {
   type: string;
   imageUrl: string;
   codeImageUrl?: string;
+  codeDisplay?: 'qr' | 'barcode';
   createdAt: Date;
   userId: string;
   brandId?: string;
@@ -42,10 +43,10 @@ const CardForm = ({ onCardAdded, onCancel }: CardFormProps) => {
   const [cardNumber, setCardNumber] = useState('');
   const [note, setNote] = useState('');
   const [image, setImage] = useState<File | null>(null);
-  const [codeImage, setCodeImage] = useState<File | null>(null);
+  // Simplification: pas de photo de code à capturer
   const [loading, setLoading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [codePreviewUrl, setCodePreviewUrl] = useState<string | null>(null);
+  const [useQR, setUseQR] = useState<boolean>(false);
   // Simplification: pas d'analyse automatique
   // Flux simplifié: pas d'analyse automatique, pas d'auto-sélection
 
@@ -138,18 +139,7 @@ const CardForm = ({ onCardAdded, onCancel }: CardFormProps) => {
     }
   };
 
-  const handleCodeImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      setCodeImage(file);
-
-      const reader = new FileReader();
-      reader.onload = () => {
-        setCodePreviewUrl(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
+  // plus de gestion de photo de code
 
   // analyzeImage supprimé dans le flux simplifié
 
@@ -184,15 +174,6 @@ const CardForm = ({ onCardAdded, onCancel }: CardFormProps) => {
         uploadedUrl = await getDownloadURL(storageRef);
       }
 
-      // Upload éventuel de la photo du code (barcode/QR)
-      let uploadedCodeUrl = '';
-      if (codeImage) {
-        const pathCode = `cards/${user.uid}/${Date.now()}_${selectedBrand.id || 'custom'}_code.jpg`;
-        const storageRefCode = ref(storage, pathCode);
-        await uploadBytes(storageRefCode, codeImage);
-        uploadedCodeUrl = await getDownloadURL(storageRefCode);
-      }
-
       // Sauvegarde en base (avec URL photo si fournie)
       const cardData = {
         name: finalBrandName,
@@ -202,7 +183,7 @@ const CardForm = ({ onCardAdded, onCancel }: CardFormProps) => {
         cardNumber: cardNumber.trim(),
         note: note.trim(),
         imageUrl: uploadedUrl,
-        codeImageUrl: uploadedCodeUrl,
+        codeDisplay: (useQR ? 'qr' : 'barcode') as 'qr' | 'barcode',
         userId: user.uid,
         createdAt: new Date()
       };
@@ -221,9 +202,8 @@ const CardForm = ({ onCardAdded, onCancel }: CardFormProps) => {
       setCardNumber('');
       setNote('');
       setImage(null);
-      setCodeImage(null);
       setPreviewUrl(null);
-      setCodePreviewUrl(null);
+      setUseQR(false);
       // États d'analyse non utilisés dans le flux simplifié
 
       onCardAdded(newCard);
@@ -422,6 +402,18 @@ const CardForm = ({ onCardAdded, onCancel }: CardFormProps) => {
                   placeholder="Ex: 123456789012345"
                   className="w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors font-mono border-gray-300"
                 />
+                <div className="mt-3 flex items-center space-x-2">
+                  <input
+                    id="useQR"
+                    type="checkbox"
+                    checked={useQR}
+                    onChange={(e) => setUseQR(e.target.checked)}
+                    className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  />
+                  <label htmlFor="useQR" className="text-sm text-gray-700">
+                    Afficher en <span className="font-medium">QR code</span> (sinon code‑barres)
+                  </label>
+                </div>
               </div>
 
               {/* Note */}
@@ -506,73 +498,7 @@ const CardForm = ({ onCardAdded, onCancel }: CardFormProps) => {
                   <span>📸 Prendre une photo</span>
                 </button>
 
-                {/* Photo du code (code-barres / QR) */}
-                <div className="mt-6">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Photo du code (code‑barres / QR) — optionnel
-                  </label>
-
-                  {codePreviewUrl ? (
-                    <div className="mb-4">
-                      <img
-                        src={codePreviewUrl}
-                        alt="Prévisualisation code"
-                        className="w-full h-32 object-contain rounded-xl border border-gray-200 bg-white"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setCodeImage(null);
-                          setCodePreviewUrl(null);
-                        }}
-                        className="mt-2 text-sm text-red-600 hover:text-red-700"
-                      >
-                        Supprimer la photo du code
-                      </button>
-                    </div>
-                  ) : (
-                    <label
-                      htmlFor="codeImage"
-                      className="flex flex-col items-center justify-center w-full h-32 border-2 border-gray-300 border-dashed rounded-xl cursor-pointer bg-gray-50 hover:bg-gray-100 transition-colors"
-                    >
-                      <div className="flex flex-col items-center justify-center p-4">
-                        <svg className="w-8 h-8 mb-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                        </svg>
-                        <p className="text-sm text-gray-500 text-center">Ajouter une photo du code</p>
-                      </div>
-                    </label>
-                  )}
-
-                  <input
-                    id="codeImage"
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    onChange={handleCodeImageChange}
-                    className="hidden"
-                  />
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const input = document.getElementById('codeImage') as HTMLInputElement;
-                      if (input) {
-                        input.setAttribute('capture', 'environment');
-                        input.click();
-                      }
-                    }}
-                    className="mt-2 w-full bg-blue-100 hover:bg-blue-200 text-blue-700 py-2 px-4 rounded-lg text-sm font-medium transition-colors flex items-center justify-center space-x-2"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 10h6M9 14h4" />
-                    </svg>
-                    <span>📷 Prendre la photo du code</span>
-                  </button>
-                </div>
-
-                {/* Interface simplifiée: pas d'analyse automatique */}
+                {/* Interface simplifiée: pas d'analyse automatique et pas de photo du code */}
               </div>
 
               {/* Boutons */}

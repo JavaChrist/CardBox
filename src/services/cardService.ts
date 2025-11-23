@@ -8,6 +8,7 @@ export interface Card {
   type: string;
   imageUrl: string;
   codeImageUrl?: string;
+  codeDisplay?: 'qr' | 'barcode';
   createdAt: Date;
   userId: string;
   brandId?: string;
@@ -38,6 +39,7 @@ export const cardService = {
           type: data.type,
           imageUrl: data.imageUrl,
           codeImageUrl: data.codeImageUrl,
+          codeDisplay: data.codeDisplay,
           createdAt: data.createdAt.toDate(),
           userId: data.userId,
           brandId: data.brandId,
