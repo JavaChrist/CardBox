@@ -29,6 +29,10 @@ const BarcodeModal: React.FC<BarcodeModalProps> = ({ card, onClose, onCardUpdate
   const [showPhoto, setShowPhoto] = useState(false);
   const [showNote, setShowNote] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
+  // Mode d'affichage du code: auto / qr / barcode
+  const [displayMode, setDisplayMode] = useState<'auto' | 'qr' | 'barcode'>(
+    () => (card.brandId === 'lidl' || /lidl/i.test(card.name) ? 'qr' : 'auto')
+  );
 
   // États pour l'édition
   const [editCardNumber, setEditCardNumber] = useState(card.cardNumber || '');
@@ -192,8 +196,27 @@ const BarcodeModal: React.FC<BarcodeModalProps> = ({ card, onClose, onCardUpdate
         ctx.clearRect(0, 0, canvas.width, canvas.height);
       }
 
-      // 🎯 DETECTION AUTOMATIQUE : QR Code vs Code-barre
-      const isQRCode = number.startsWith('http') || number.startsWith('https') || number.includes('://') || number.includes('{') && number.includes('}') || number.includes('|') || number.includes(';') || number.length > 50 || /[A-Za-z].*[A-Za-z].*[A-Za-z]/.test(number);
+      // 🎯 Choix du rendu: forcé ou auto
+      let isQRCode: boolean;
+      if (displayMode === 'qr') {
+        isQRCode = true;
+      } else if (displayMode === 'barcode') {
+        isQRCode = false;
+      } else {
+        // Heuristique AUTO
+        isQRCode =
+          number.startsWith('http') ||
+          number.startsWith('https') ||
+          number.includes('://') ||
+          (number.includes('{') && number.includes('}')) ||
+          number.includes('|') ||
+          number.includes(';') ||
+          number.length > 50 ||
+          /[A-Za-z].*[A-Za-z].*[A-Za-z]/.test(number) ||
+          // Cas spécifiques marques connues (ex: Lidl → QR)
+          card.brandId === 'lidl' ||
+          /lidl/i.test(card.name);
+      }
 
       if (isQRCode) {
         // Générer un QR code
@@ -207,7 +230,7 @@ const BarcodeModal: React.FC<BarcodeModalProps> = ({ card, onClose, onCardUpdate
     } catch {
       return false;
     }
-  }, []);
+  }, [displayMode, card.brandId, card.name]);
 
   // Utiliser le vrai numéro de carte - condition améliorée
   const hasRealBarcode = card.cardNumber && card.cardNumber.trim().length >= 4;
@@ -382,6 +405,29 @@ const BarcodeModal: React.FC<BarcodeModalProps> = ({ card, onClose, onCardUpdate
               {/* Code-barre principal */}
               <div className="mb-4">
                 <div className="bg-white p-4 rounded-lg border border-gray-200">
+                  {/* Sélecteur d'affichage */}
+                  {hasRealBarcode && (
+                    <div className="flex items-center justify-center gap-2 mb-3">
+                      <button
+                        onClick={() => setDisplayMode('auto')}
+                        className={`px-3 py-1 rounded-md text-xs border ${displayMode === 'auto' ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-700 border-gray-300'}`}
+                      >
+                        Auto
+                      </button>
+                      <button
+                        onClick={() => setDisplayMode('barcode')}
+                        className={`px-3 py-1 rounded-md text-xs border ${displayMode === 'barcode' ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-700 border-gray-300'}`}
+                      >
+                        Code‑barres
+                      </button>
+                      <button
+                        onClick={() => setDisplayMode('qr')}
+                        className={`px-3 py-1 rounded-md text-xs border ${displayMode === 'qr' ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-700 border-gray-300'}`}
+                      >
+                        QR code
+                      </button>
+                    </div>
+                  )}
                   {hasRealBarcode ? (
                     <div className="flex justify-center items-center py-2">
                       <canvas
