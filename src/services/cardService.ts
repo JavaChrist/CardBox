@@ -7,6 +7,7 @@ export interface Card {
   name: string;
   type: string;
   imageUrl: string;
+  codeImageUrl?: string;
   createdAt: Date;
   userId: string;
   brandId?: string;
@@ -36,6 +37,7 @@ export const cardService = {
           name: data.name,
           type: data.type,
           imageUrl: data.imageUrl,
+          codeImageUrl: data.codeImageUrl,
           createdAt: data.createdAt.toDate(),
           userId: data.userId,
           brandId: data.brandId,

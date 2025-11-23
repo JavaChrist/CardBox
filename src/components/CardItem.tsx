@@ -9,6 +9,7 @@ interface Card {
   name: string;
   type: string;
   imageUrl: string;
+  codeImageUrl?: string;
   createdAt: Date;
   userId: string;
   brandId?: string;
@@ -141,6 +142,20 @@ const CardItem = ({ card, onCardDeleted, onCardUpdated }: CardItemProps) => {
 
         {/* Corps de la carte */}
         <div className="p-4 bg-gradient-to-br from-gray-50 to-white">
+          {/* Photo du code si disponible */}
+          {card.codeImageUrl && (
+            <div className="mb-3">
+              <img
+                src={card.codeImageUrl}
+                alt={`${card.name} — code`}
+                className="w-full h-32 object-contain rounded-lg border border-gray-200 bg-white"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowBarcodeModal(true);
+                }}
+              />
+            </div>
+          )}
           {/* Photo visible si disponible */}
           {card.imageUrl && (
             <div className="mb-3">
