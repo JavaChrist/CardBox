@@ -1,53 +1,98 @@
-# 📦 CardBox – Gestion simple des cartes de magasin
+# CardBox
 
-Application web PWA pour stocker ses cartes de fidélité de manière sécurisée.  
-L'utilisateur peut ajouter une carte avec photo, nom du magasin, et informations complémentaires.  
-Les données sont synchronisées via Firebase.
+CardBox est une application web personnelle pour ranger ses cartes de fidélité. Elle s’adresse à une personne qui veut retrouver, sur son téléphone ou son ordinateur, le numéro, la photo et un code affichable en magasin, sans garder les cartes plastiques sur soi.
 
-## 🚀 Stack technique
+L’interface est en français. La liste d’enseignes proposée à l’ajout est surtout composée de magasins courants en France. Chaque compte ne voit que ses propres cartes.
 
-- **React + Vite**
-- **TypeScript**
-- **TailwindCSS**
-- **Firebase (Auth + Firestore + Storage)**
-- **PWA Ready**
+Le dépôt est en version `0.0.0`. Aucune adresse publique de l’application n’est indiquée dans le projet : la mise en ligne reste à confirmer.
 
-## 🛠️ Installation
+## Fonctionnalités
+
+### Opérationnelles
+
+Ces parcours sont reliés à l’interface et enregistrent ou affichent des données.
+
+- **Compte.** Création de compte et connexion avec une adresse e-mail et un mot de passe. La session est conservée : une personne déjà connectée arrive directement sur son portefeuille. La déconnexion est disponible.
+- **Portefeuille.** Liste des cartes du compte, de la plus récente à la plus ancienne, avec le nombre de cartes et un état vide lorsqu’il n’y en a pas encore.
+- **Ajout d’une carte.** Choix parmi 30 entrées (29 enseignes ou catégories, plus « Autre marque » pour saisir un nom libre). Catégories prévues : supermarché, pharmacie, restaurant, sport, vêtement, beauté, bricolage et autre. Saisie du numéro, d’une note et, si on le souhaite, d’une photo prise ou choisie sur l’appareil. La photo est envoyée vers le stockage, et la fiche est enregistrée.
+- **Affichage en magasin.** À partir du numéro saisi, l’application dessine un code-barres ou un QR code. À la création, une case permet de choisir le QR code ; sinon un code-barres est utilisé. En ouvrant une carte, on peut basculer entre automatique, code-barres et QR code. Pour Lidl, l’affichage proposé au départ est le QR code. Un numéro d’au moins 4 caractères est nécessaire pour ce dessin.
+- **Consultation.** Toucher une carte ouvre une fenêtre avec le numéro, la note et le code. S’il n’y a pas de numéro exploitable, la photo de la carte est montrée à la place.
+- **Modification.** Depuis « Gérer », on peut changer le numéro et la note. Ces deux champs sont bien réenregistrés.
+- **Suppression.** Depuis les points de la carte, une fenêtre de confirmation supprime la fiche et tente aussi de retirer la photo du stockage.
+- **Application installable.** À la construction du site, un manifeste et un service worker sont générés (nom « CardBox - Portefeuille Digital », affichage plein écran, mise à jour automatique). Les fichiers de l’application et les polices Google sont mis en cache. Les cartes, elles, sont rechargées depuis le compte à chaque ouverture.
+
+### Partielles
+
+- **Changement de photo après création.** Le menu « Gérer » propose « Photos » et un bouton d’enregistrement, mais seule la mise à jour du numéro et de la note est envoyée. La nouvelle photo n’est pas enregistrée.
+- **Suppression depuis « Gérer ».** Cette suppression retire la fiche. Elle ne retire pas la photo du stockage, contrairement à la suppression lancée depuis les points de la carte.
+- **Message d’accueil.** Quand le portefeuille est vide, le texte invite encore à prendre une photo « pour une analyse automatique ». L’écran d’ajout actuel conserve la photo et n’analyse pas l’image.
+- **Logos d’enseignes.** Ils sont chargés depuis des adresses externes (Clearbit, et une image de remplacement pour Pharmacie et Autre marque). Si l’image ne s’affiche pas, un pictogramme de la catégorie prend le relais.
+- **Écran de chargement.** Il cherche une image `logob192.png`, absente du dossier public. Le secours affiché est alors le pictogramme du paquet.
+- **Erreurs à l’ajout.** Si l’enregistrement échoue, le formulaire se termine sans message visible.
+
+### Présentes dans le code, non reliées à l’écran
+
+Le fichier `src/services/imageAnalysisService.ts` sait lire une photo pour y chercher un QR code, un code-barres et du texte (numéros possibles). Les bibliothèques correspondantes sont installées. Aucune page ni aucun formulaire ne l’appelle : le commentaire du formulaire précise que cette analyse a été retirée du parcours simplifié. Le document `IMPLEMENTATION_SUMMARY.md` décrit un branchement qui n’est plus celui du code actuel.
+
+`CardList.tsx` existe encore, mais le portefeuille affiche les cartes directement, sans passer par ce composant.
+
+Le champ « photo du code » (`codeImageUrl`) peut encore être affiché s’il est déjà présent sur une ancienne fiche. Le formulaire actuel ne le remplit pas.
+
+### Simulées
+
+Sur chaque vignette, un motif de barres est dessiné à partir de l’identifiant de la fiche, avec quatre caractères masqués. Ce dessin ne reprend pas le vrai numéro. Le code utilisable en magasin est celui généré à partir du numéro saisi, dans la vignette et dans la fenêtre de la carte.
+
+Le badge « Actif » et la mention « Membre depuis » reprennent la date d’ajout dans CardBox. Ils ne reflètent pas un statut fourni par l’enseigne.
+
+### Prévues ou absentes
+
+Ces éléments ne sont pas implémentés dans les pages :
+
+- récupération d’un mot de passe oublié ;
+- recherche, filtres ou catégories créées par la personne ;
+- export ou import des cartes ;
+- alertes pour une carte expirée ;
+- usage hors connexion des cartes elles-mêmes (seule l’enveloppe de l’application est prévue au cache).
+
+## Stack
+
+- React 19 et TypeScript
+- Vite 6
+- Tailwind CSS
+- Firebase : authentification e-mail, base Firestore (collection `cards`), stockage des photos
+- Génération des codes : JsBarcode (format CODE128) et la bibliothèque `qrcode`
+- Application web installable : `vite-plugin-pwa` (manifeste et service worker produits au build)
+- Bibliothèques d’analyse d’image installées mais non appelées par l’interface : Tesseract.js, Quagga, jsQR
+
+## Installation
+
+Dépôt : `https://github.com/JavaChrist/CardBox.git`
 
 ```bash
-# Cloner le projet
-git clone <url-du-repo>
-cd cardbox
-
-# Installer les dépendances
+git clone https://github.com/JavaChrist/CardBox.git
+cd CardBox
 npm install
-
-# Démarrer en développement
 npm run dev
 ```
 
-## 🔐 Configuration Firebase
+Le serveur de développement Vite indique l’adresse locale dans le terminal. Le fichier `package.json` ne fixe pas de version de Node.js.
 
-1. **Créer un projet Firebase** sur [console.firebase.google.com](https://console.firebase.google.com)
+## Configuration
 
-2. **Activer les services suivants :**
+Créer un projet Firebase, activer la connexion e-mail / mot de passe, Firestore et Storage, puis placer les valeurs dans un fichier `.env.local` à la racine. Ce fichier n’est pas versionné.
 
-   - Authentication → Email/Password
-   - Firestore Database (mode test pour dev)
-   - Storage
+Variables attendues par `src/services/firebase.ts` :
 
-3. **Créer un fichier `.env.local`** à la racine du projet :
+- `VITE_API_KEY`
+- `VITE_AUTH_DOMAIN`
+- `VITE_PROJECT_ID`
+- `VITE_STORAGE_BUCKET`
+- `VITE_MESSAGING_SENDER_ID`
+- `VITE_APP_ID`
 
-```bash
-VITE_API_KEY=xxxxxxxxxxxxxxxxxx
-VITE_AUTH_DOMAIN=xxxx.firebaseapp.com
-VITE_PROJECT_ID=xxxxx
-VITE_STORAGE_BUCKET=xxxxx.appspot.com
-VITE_MESSAGING_SENDER_ID=xxxxx
-VITE_APP_ID=1:xxxx:web:xxxxx
-```
+Aucune règle de sécurité n’est versionnée dans le dépôt. Côté console Firebase, l’accès prévu par l’application est le suivant : une personne connectée lit et modifie uniquement les cartes dont le champ `userId` correspond à son identifiant ; les photos sont rangées sous `cards/{identifiant}/…` et réservées à ce même identifiant.
 
-4. **Règles Firestore** (à configurer dans la console Firebase) :
+Exemple de règles Firestore à saisir dans la console :
 
 ```javascript
 rules_version = '2';
@@ -61,7 +106,7 @@ service cloud.firestore {
 }
 ```
 
-5. **Règles Storage** :
+Exemple de règles Storage :
 
 ```javascript
 rules_version = '2';
@@ -74,121 +119,47 @@ service firebase.storage {
 }
 ```
 
-## 🚀 Déploiement sur Vercel
+Une fiche de carte enregistre : nom, catégorie, identifiant d’enseigne, adresse du logo, numéro, note, adresse de la photo, choix QR ou code-barres, identifiant du compte et date de création.
 
-### 1. **Prérequis**
+## Commandes
 
-- Compte [Vercel](https://vercel.com)
-- Projet Firebase configuré
-- Repository Git (GitHub, GitLab, Bitbucket)
+| Commande | Rôle |
+| --- | --- |
+| `npm run dev` | Lance l’application en développement |
+| `npm run build` | Vérifie TypeScript puis construit le site dans `dist` |
+| `npm run preview` | Sert le dossier `dist` en local |
+| `npm run lint` | Lance ESLint |
+| `npm run icons:gen` | Régénère les icônes à partir d’une image source (`public/logo512.png` par défaut) |
 
-### 2. **Déploiement automatique**
-
-1. **Pusher le code** sur votre repository Git
-2. **Connecter à Vercel** : [vercel.com/new](https://vercel.com/new)
-3. **Importer** votre repository CardBox
-4. **Framework** : Vite sera détecté automatiquement
-5. **Variables d'environnement** : Ajouter dans Settings > Environment Variables :
-
-```bash
-VITE_API_KEY=your_firebase_api_key
-VITE_AUTH_DOMAIN=your_project.firebaseapp.com
-VITE_PROJECT_ID=your_project_id
-VITE_STORAGE_BUCKET=your_project.appspot.com
-VITE_MESSAGING_SENDER_ID=your_sender_id
-VITE_APP_ID=1:your_app_id:web:your_app_id
-```
-
-6. **Deploy** ! 🚀
-
-### 3. **Configuration automatique**
-
-- ✅ Build Command: `npm run build`
-- ✅ Output Directory: `dist`
-- ✅ Framework: Vite
-- ✅ Node.js Version: 18.x
-
-### 4. **Domaine personnalisé (optionnel)**
-
-Dans Vercel Dashboard > Settings > Domains, ajouter votre domaine personnalisé.
-
-## ✅ Fonctionnalités
-
-### Authentification
-
-- ✅ Connexion / création de compte par email
-- ✅ Redirection automatique vers le dashboard si connecté
-
-### Gestion des cartes
-
-- ✅ Sélection parmi 20+ marques populaires françaises
-- ✅ Option "Autre marque" pour marques non référencées
-- ✅ Upload de photo (vers Firebase Storage)
-- ✅ Scanner de code-barres (simulation)
-- ✅ Saisie manuelle des informations
-- ✅ Affichage avec vrais logos de marques
-- ✅ Code-barres généré automatiquement
-- ✅ Menu "Gérer" : Modifier, Photos, Note, Supprimer
-- ✅ Types de cartes : Supermarché, Pharmacie, Restaurant, etc.
-
-### Interface
-
-- ✅ Design moderne style Klarna avec TailwindCSS
-- ✅ Responsive (mobile/desktop)
-- ✅ Cartes réalistes avec codes-barres
-- ✅ Modal plein écran pour codes-barres
-- ✅ État vide avec bouton d'ajout
-- ✅ Feedback utilisateur (loading, erreurs)
-
-## 📱 PWA
-
-L'application est configurée comme PWA :
-
-- ✅ Manifest.webmanifest
-- ✅ Meta tags appropriés
-- 🔄 Service Worker (à implémenter avec vite-plugin-pwa)
-
-## 🏗️ Structure du projet
+## Structure
 
 ```
 src/
-├── components/
-│   ├── CardForm.tsx          # Formulaire d'ajout avec sélection marques
-│   ├── CardList.tsx          # Liste des cartes
-│   ├── CardItem.tsx          # Carte individuelle avec vrais logos
-│   └── BarcodeModal.tsx      # Modal code-barre + menu "Gérer"
+├── App.tsx                         # Session : portefeuille ou page de connexion
 ├── pages/
-│   ├── Login.tsx             # Page de connexion
-│   └── Dashboard.tsx         # Portefeuille principal
+│   ├── Login.tsx                   # Inscription et connexion
+│   └── Dashboard.tsx               # Portefeuille
+├── components/
+│   ├── CardForm.tsx                # Ajout : enseigne, photo, numéro, note
+│   ├── CardItem.tsx                # Vignette, code généré, suppression
+│   ├── BarcodeModal.tsx            # Fenêtre du code et menu Gérer
+│   └── CardList.tsx                # Liste non utilisée par le portefeuille
 ├── services/
-│   ├── firebase.ts           # Configuration Firebase
-│   └── cardService.ts        # Service de gestion des cartes
-├── data/
-│   └── popularBrands.ts      # 20+ marques françaises avec logos
-├── App.tsx                   # Composant principal avec auth
-└── main.tsx                  # Point d'entrée
+│   ├── firebase.ts                 # Auth, Firestore, Storage
+│   ├── cardService.ts              # Lecture et suppression
+│   └── imageAnalysisService.ts     # Analyse d’image, non appelée par l’interface
+└── data/
+    └── popularBrands.ts            # Enseignes proposées à l’ajout
 ```
 
-## 🚀 Déploiement
+Le dossier `public/` contient le logo et les icônes utilisées par l’en-tête, l’onglet du navigateur et l’installation sur l’écran d’accueil.
 
-```bash
-# Build de production
-npm run build
+## Déploiement
 
-# Aperçu du build
-npm run preview
-```
+`vercel.json` prépare un site d’une seule page : toutes les adresses renvoient vers `index.html`. Il ajoute aussi deux en-têtes de sécurité (`X-Frame-Options: DENY` et `X-Content-Type-Options: nosniff`). La commande de construction attendue est `npm run build`, avec le dossier `dist` en résultat.
 
-## 💡 Améliorations futures
+Pour un hébergement, les six variables `VITE_…` ci-dessus doivent être définies dans l’environnement de construction. Le dépôt ne contient pas d’adresse de site déployé.
 
-- [ ] OCR avec Tesseract.js pour extraire automatiquement les infos
-- [ ] Lecture de code-barres / QR code avec la caméra
-- [ ] Catégories personnalisées
-- [ ] Mode hors-ligne avec service worker
-- [ ] Notifications pour les cartes expirées
-- [ ] Export/Import des données
-- [ ] Recherche et filtres avancés
+## Licence
 
-## 📝 Licence
-
-MIT
+L’ancien texte du dépôt indiquait une licence MIT. Aucun fichier `LICENSE` n’est présent : la licence reste à confirmer.
